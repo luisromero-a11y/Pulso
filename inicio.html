@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulso by G4S: Datos que protegen. Decisiones que potencian.</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts - Usando Inter como alternativa web a Arial -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Arial&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- D3.js CDN for the map -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        /* Estilos personalizados para la página */
+        body {
+            font-family: 'Arial', 'Inter', sans-serif;
+            background-color: #F0F2F5;
+        }
+
+        /* Colores personalizados de G4S */
+        :root {
+            --g4s-red: #E4002B;
+            --g4s-blue: #0C2340;
+        }
+
+        .g4s-red { color: var(--g4s-red); }
+        .bg-g4s-red { background-color: var(--g4s-red); }
+        .g4s-blue { color: var(--g4s-blue); }
+        .bg-g4s-blue { background-color: var(--g4s-blue); }
+
+        /* Estilo para las tarjetas con efecto 3D */
+        .feature-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            will-change: transform;
+            perspective: 1000px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-content {
+             transform: translateZ(20px);
+             flex-grow: 1;
+             display: flex;
+             flex-direction: column;
+        }
+        
+        /* Botón con gradiente y efecto hover */
+        .cta-button {
+            background-image: linear-gradient(to right, var(--g4s-red) 0%, #c00024 100%);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px 0 rgba(228, 0, 43, 0.4);
+        }
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 7px 20px 0 rgba(228, 0, 43, 0.6);
+        }
+
+        /* Animación de aparición */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        /* Estilos para la demo interactiva */
+        .screen-mockup {
+            position: relative;
+            width: 100%;
+            max-width: 800px; /* Ancho máximo para la vista de portal */
+            height: 600px;
+            margin: auto;
+            border: 12px solid #111;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3);
+            background: #fff;
+            overflow: hidden;
+            transition: all 0.4s ease-in-out;
+        }
+        .screen-mockup.phone-size {
+            max-width: 320px;
+            height: 640px;
+            border-radius: 40px;
+        }
+        .screen-mockup iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #fff;
+        }
+        .demo-story-controls button {
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+        .demo-story-controls button.active {
+            border-bottom-color: var(--g4s-red);
+            color: var(--g4s-blue);
+        }
+
+        /* Estilos sutiles para la navegación de vistas */
+        .nav-tab {
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            opacity: 0.7;
+            background: none;
+            border-radius: 0;
+            color: white;
+        }
+        .nav-tab:hover {
+            opacity: 1;
+        }
+        .nav-tab.active-tab {
+            opacity: 1;
+            border-bottom-color: var(--g4s-red);
+        }
+        
+        /* Estilos para el mapa */
+        .map-container {
+            position: relative;
+            padding-bottom: 75%; /* Aspect ratio 4:3 */
+            height: 0;
+            overflow: hidden;
+        }
+        .map-container svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .map-container .country {
+            fill: #D1D5DB; /* Gris claro */
+            stroke: #F0F2F5; /* Color de fondo para borde sutil */
+            stroke-width: 0.5px;
+            transition: fill 0.2s ease-in-out;
+        }
+        .map-container .country.highlighted {
+            fill: var(--g4s-blue); /* Azul G4S para países con presencia */
+        }
+        .map-container .country-point {
+            fill: var(--g4s-red);
+            stroke: white;
+            stroke-width: 1.5px;
+        }
+        .map-container .country-line {
+            stroke: var(--g4s-red);
+            stroke-width: 1.5px;
+            fill: none;
+        }
+        .map-container .country-label {
+            font-size: 1rem;
+            font-weight: bold;
+            fill: var(--g4s-blue);
+            text-anchor: start; /* Default alignment */
+            pointer-events: none;
+        }
+        .map-container .tooltip {
+            position: absolute; text-align: center; padding: 0.5rem 0.75rem;
+            background: #333; color: #fff; border-radius: 0.5rem;
+            pointer-events: none; opacity: 0; transition: opacity 0.2s;
+            font-size: 0.875rem; z-index: 1000;
+        }
+
+        /* Estilos para la nueva sección de aplicaciones */
+        .hub-button-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+        }
+        .hub-button {
+            width: 96px; height: 96px; flex-shrink: 0;
+            border-radius: 9999px; background-color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease-in-out;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .hub-button:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .hub-button.active {
+            background-color: var(--g4s-red); transform: scale(1.1) translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .hub-button.active svg {
+            filter: brightness(0) invert(1);
+        }
+        .hub-label {
+            transition: color 0.3s ease-in-out; margin-top: 0.75rem; padding: 0 4px;
+        }
+        .hub-label.active {
+            color: var(--g4s-red); font-weight: 700;
+        }
+        .content-panel {
+            display: none; animation: fadeIn 0.5s ease-in-out;
+        }
+        .content-panel.active {
+            display: block;
+        }
+        .app-tag {
+            background-color: #f1f5f9; color: #334155;
+            font-size: 0.875rem; font-weight: 500;
+            padding: 0.375rem 0.75rem; border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    
+    <!-- CONTENEDOR VISTA PORTAL (INICIO) -->
+    <div id="portal-view">
+        <header class="bg-g4s-blue text-white shadow-lg relative overflow-hidden">
+            <nav id="portal-nav" class="text-white p-4 flex justify-center space-x-8 z-50">
+                <button data-target="portal" class="nav-tab active-tab text-lg font-bold pb-2">Inicio</button>
+                <button data-target="commercial" class="nav-tab text-lg font-bold pb-2">Conoce más</button>
+            </nav>
+            <div class="container mx-auto px-6 pt-8 pb-16 text-center relative z-10">
+                <div class="flex justify-center items-center gap-4 mb-4">
+                    <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2F6ad6be30.FOTOGRAFIA.003415.png" alt="Logo Pulso" class="w-16 h-16 object-contain">
+                    <h1 class="text-4xl md:text-6xl font-black tracking-tight leading-tight">Bienvenido a Pulso</h1>
+                </div>
+                <p class="text-xl md:text-2xl font-light opacity-90">Su Centro de Inteligencia Operativa</p>
+            </div>
+        </header>
+
+        <section class="container mx-auto px-4 sm:px-6 py-12 md:py-16">
+            <div class="max-w-4xl mx-auto text-center">
+                <p class="text-lg md:text-xl leading-relaxed">
+                    En G4S, revolucionamos su seguridad. <strong class="g4s-red font-bold">Pulso</strong> es la plataforma que convierte datos de seguridad en <strong class="g4s-blue font-bold">inteligencia de negocio</strong>, dándole un poder de visión y control sin precedentes.
+                </p>
+            </div>
+        </section>
+
+        <main class="container mx-auto px-4 sm:px-6 pb-12 md:pb-16">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+                <div class="feature-card fade-in">
+                     <div class="p-6 md:p-8 card-content">
+                        <div class="mb-4"><svg class="w-12 h-12 md:w-16 md:h-16 g4s-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"></path></svg></div>
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-2">Aplicaciones Digitales</h3>
+                        <p class="text-gray-600">Acceda a un ecosistema de herramientas que estandarizan y digitalizan cada tarea, asegurando la <strong class="font-semibold">Calidad</strong> del servicio.</p>
+                    </div>
+                </div>
+                <div class="feature-card fade-in" style="animation-delay: 0.1s;">
+                     <div class="p-6 md:p-8 card-content">
+                        <div class="mb-4"><svg class="w-12 h-12 md:w-16 md:h-16 g4s-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h12A2.25 2.25 0 0020.25 14.25V3m-16.5 0h16.5m-16.5 0a2.25 2.25 0 00-2.25 2.25v16.5A2.25 2.25 0 003.75 24h16.5a2.25 2.25 0 002.25-2.25V5.25A2.25 2.25 0 0018 3m-16.5 0h16.5"></path></svg></div>
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-2">Paneles de Control</h3>
+                        <p class="text-gray-600">Convierta datos en decisiones. Visualice KPIs, analice tendencias y descubra oportunidades de <strong class="font-semibold">Optimización</strong> continua.</p>
+                    </div>
+                </div>
+                <div class="feature-card fade-in" style="animation-delay: 0.2s;">
+                    <div class="p-6 md:p-8 card-content">
+                        <div class="mb-4"><svg class="w-12 h-12 md:w-16 md:h-16 g4s-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c.251.023.501.05.75.082a.75.75 0 01.75.75v5.714a2.25 2.25 0 00.659 1.591L19 14.5M9.75 3.104C11.62 3.104 13.5 3.722 15 5.134M21 14.5c-1.5-1.412-3.38-2.03-5.25-2.03s-3.75.618-5.25 2.03m10.5 0a.75.75 0 01.75.75v3.375c0 .621-.504 1.125-1.125 1.125h-16.5c-.621 0-1.125-.504-1.125-1.125V15.25a.75.75 0 01.75-.75m10.5 0c-1.5-1.412-3.38-2.03-5.25-2.03s-3.75.618-5.25 2.03"></path></svg></div>
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-2">Tablero de Actividad</h3>
+                        <p class="text-gray-600">Observe el pulso de su operación. Cada acción se refleja, ofreciéndole una <strong class="font-semibold">Transparencia</strong> total.</p>
+                    </div>
+                </div>
+                <div class="feature-card fade-in" style="animation-delay: 0.3s;">
+                     <div class="p-6 md:p-8 card-content">
+                        <div class="mb-4"><svg class="w-12 h-12 md:w-16 md:h-16 g4s-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.75 15.75l-2.489-2.489m0 0a3.375 3.375 0 10-4.773-4.773 3.375 3.375 0 004.774 4.774zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-2">Gestión de Novedades</h3>
+                        <p class="text-gray-600">Centralice incidentes para una gestión proactiva y un seguimiento detallado, garantizando el <strong class="font-semibold">Cumplimiento</strong> de protocolos.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <section class="bg-white py-12 md:py-20 mt-16">
+            <div class="container mx-auto px-4 sm:px-6 text-center">
+                <h2 class="text-2xl md:text-4xl font-extrabold g4s-blue mb-4">Transforme su Seguridad Hoy</h2>
+                <p class="max-w-2xl mx-auto text-base md:text-lg text-gray-600 mb-8">Descubra cómo Pulso puede fortalecer su operación, reducir riesgos y optimizar su inversión en seguridad.</p>
+                <a href="#" class="cta-button inline-block text-white font-bold text-lg px-8 py-4 rounded-lg">
+                    Solicite una Demostración
+                </a>
+            </div>
+        </section>
+        <footer class="bg-g4s-blue mt-1">
+            <div class="container mx-auto px-4 sm:px-6 py-8 text-center text-white">
+                <p><strong class="g4s-red">Pulso</strong> es nuestro compromiso con una seguridad inteligente, automatizada y completamente transparente.</p>
+                <p class="mt-4 text-sm opacity-75">© 2024 G4S. Todos los derechos reservados.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- CONTENEDOR VISTA COMERCIAL -->
+    <div id="commercial-view" class="hidden">
+        <header class="bg-g4s-blue text-white shadow-lg relative overflow-hidden">
+             <nav id="commercial-nav" class="text-white p-4 flex justify-center space-x-8 z-50">
+                <button data-target="portal" class="nav-tab text-lg font-bold pb-2">Inicio</button>
+                <button data-target="commercial" class="nav-tab active-tab text-lg font-bold pb-2">Conoce más</button>
+            </nav>
+            <div class="container mx-auto px-6 pt-8 pb-16 text-center relative z-10">
+                <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2F6ad6be30.FOTOGRAFIA.003415.png" alt="Logo Pulso" class="w-20 h-20 mx-auto mb-4 object-contain">
+                <h1 class="text-3xl md:text-5xl font-black tracking-tight leading-tight">Pulso by G4S: Datos que protegen. Decisiones que potencian.</h1>
+                <p class="text-lg md:text-2xl font-light opacity-90 mt-4">Deje de gestionar la seguridad. Comience a dirigirla con datos.</p>
+            </div>
+        </header>
+
+        <!-- =================================================================== -->
+        <!-- ================ SECCIÓN 1: PILARES FUNDAMENTALES =================== -->
+        <!-- =================================================================== -->
+        <main class="container mx-auto px-4 sm:px-6 py-12 md:py-16">
+            <h2 class="text-2xl md:text-4xl font-bold g4s-blue mb-12 text-center">Transformamos su operación a través de cuatro pilares fundamentales:</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+                <div class="feature-card fade-in">
+                     <div class="p-6 md:p-8 card-content">
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-3">1. Transparencia Total y Colaborativa</h3>
+                        <p class="text-gray-600 mb-4 flex-grow">Olvídese de las cajas negras. Con nuestro portal, usted ve lo que nosotros vemos: actividad de los oficiales, estado de las instalaciones y reportes de incidentes en tiempo real. Fomentamos una alianza basada en la confianza y la información compartida.</p>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Beneficios Clave:</h4>
+                            <p class="text-sm g4s-red font-semibold">Visibilidad 24/7, confianza en el servicio, acceso directo a la data operativa.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="feature-card fade-in" style="animation-delay: 0.1s;">
+                     <div class="p-6 md:p-8 card-content">
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-3">2. Cumplimiento Normativo y Operacional</h3>
+                        <p class="text-gray-600 mb-4 flex-grow">Digitalizamos y estandarizamos sus protocolos de seguridad. Cada tarea sigue un flujo de trabajo predefinido, creando un registro digital inalterable para cada acción. Esto simplifica las auditorías, mitiga los riesgos y garantiza el cumplimiento.</p>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Beneficios Clave:</h4>
+                            <p class="text-sm g4s-red font-semibold">Reducción del riesgo, trazabilidad completa, evidencia digital para auditorías.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="feature-card fade-in" style="animation-delay: 0.2s;">
+                    <div class="p-6 md:p-8 card-content">
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-3">3. Optimización Estratégica de Recursos</h3>
+                        <p class="text-gray-600 mb-4 flex-grow">Pulso convierte miles de datos operativos en conocimiento accionable. Identifique cuellos de botella, mida tiempos de respuesta y tome decisiones basadas en evidencia para optimizar su presupuesto de seguridad y mejorar la eficacia del servicio.</p>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Beneficios Clave:</h4>
+                            <p class="text-sm g4s-red font-semibold">Mejora del ROI en seguridad, asignación eficiente de personal, mejora continua.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="feature-card fade-in" style="animation-delay: 0.3s;">
+                     <div class="p-6 md:p-8 card-content">
+                        <h3 class="text-xl md:text-2xl font-bold g4s-blue mb-3">4. Automatización Inteligente de Procesos</h3>
+                        <p class="text-gray-600 mb-4 flex-grow">Liberamos a los equipos de la carga del papeleo. La plataforma automatiza la recolección, consolidación y visualización de datos. Las alertas y notificaciones se generan de forma automática, permitiendo que el personal se enfoque en lo que realmente importa: prevenir y responder.</p>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Beneficios Clave:</h4>
+                            <p class="text-sm g4s-red font-semibold">Aumento de productividad, reducción de errores, enfoque en tareas de alto valor.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- =================================================================== -->
+        <!-- ================ SECCIÓN 2: ¿QUÉ INCLUYE? ========================== -->
+        <!-- =================================================================== -->
+        <section class="bg-gray-50 py-12 md:py-16">
+            <div class="container mx-auto px-4 sm:px-6 text-center">
+                <h2 class="text-2xl md:text-4xl font-extrabold g4s-blue mb-8">¿Qué incluye la plataforma Pulso?</h2>
+                <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                    <div class="flex items-start space-x-4">
+                        <svg class="w-8 h-8 g4s-red flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        <div>
+                            <h3 class="font-bold text-lg g4s-blue">Un Portal de Cliente Unificado</h3>
+                            <p class="text-gray-600">Su único punto de acceso para monitorear, analizar y gestionar toda la información de su servicio de seguridad.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4">
+                        <svg class="w-8 h-8 g4s-red flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        <div>
+                            <h3 class="font-bold text-lg g4s-blue">Una Biblioteca de Aplicaciones</h3>
+                            <p class="text-gray-600">Soluciones móviles probadas y estandarizadas para cada necesidad operativa (control de acceso, rondas, inspecciones, etc.).</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-4">
+                         <svg class="w-8 h-8 g4s-red flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                        <div>
+                            <h3 class="font-bold text-lg g4s-blue">Analítica Avanzada</h3>
+                            <p class="text-gray-600">Herramientas de visualización de datos que le permiten explorar su información de seguridad como nunca antes.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- ================ SECCIÓN 3: VIAJE DE LOS DATOS ====================== -->
+        <!-- =================================================================== -->
+        <section id="demo-story-commercial" class="py-12 md:py-20 bg-white">
+            <div class="container mx-auto px-4 sm:px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-2xl md:text-4xl font-extrabold g4s-blue mb-4">Vea el Viaje de los Datos con Pulso</h2>
+                    <p class="max-w-3xl mx-auto text-base md:text-lg text-gray-600">Siga el flujo de la información, desde la recolección en campo hasta la inteligencia estratégica en sus manos.</p>
+                </div>
+                <div class="demo-story-controls flex justify-center items-center space-x-2 md:space-x-8 mb-8 border-b">
+                    <button data-step="1" class="story-btn active font-bold text-base md:text-lg py-4 px-2">1. El Oficial en Campo</button>
+                    <div class="h-6 w-px bg-gray-300 hidden md:block"></div>
+                    <button data-step="2" class="story-btn font-bold text-base md:text-lg py-4 px-2">2. La Inteligencia de Datos</button>
+                     <div class="h-6 w-px bg-gray-300 hidden md:block"></div>
+                    <button data-step="3" class="story-btn font-bold text-base md:text-lg py-4 px-2">3. El Portal del Cliente</button>
+                </div>
+                <div class="text-center text-gray-700 mb-8 h-12">
+                    <p id="story-description-commercial" class="text-lg md:text-xl transition-opacity duration-300"></p>
+                </div>
+                <div id="screen-container-commercial" class="screen-mockup phone-size mx-auto">
+                    <iframe id="demo-frame-commercial" src="" title="Demo interactiva de Pulso"></iframe>
+                </div>
+            </div>
+        </section>
+        
+        <!-- =================================================================== -->
+        <!-- ================ SECCIÓN 4: ECOSISTEMA DE SOLUCIONES =============== -->
+        <!-- =================================================================== -->
+        <section class="py-12 md:py-20 bg-gray-50">
+            <div class="container mx-auto px-4 sm:px-6">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Un Ecosistema de Soluciones a su Servicio</h2>
+                    <p class="text-lg text-slate-600 max-w-3xl mx-auto">Para facilitar una gestión de seguridad integral, hemos organizado nuestras soluciones en seis categorías. Cada una está diseñada para fortalecer un área específica de su operación, garantizando control, eficiencia y cumplimiento.</p>
+                    <!-- TARJETA ACTUALIZADA -->
+                    <div class="mt-8 max-w-sm mx-auto bg-white p-6 rounded-2xl shadow-lg border-4 border-g4s-blue text-center transform hover:scale-105 transition-transform duration-300">
+                        <p class="text-6xl md:text-7xl font-black g4s-red tracking-tighter">+100</p>
+                        <p class="text-lg md:text-xl text-slate-700 font-semibold mt-2">Aplicaciones listas para su operación</p>
+                    </div>
+                </div>
+                <div class="flex flex-col lg:flex-row gap-12 lg:gap-16 items-center">
+                    <div id="hub-navigation" class="w-full lg:w-1/2 grid grid-cols-2 md:grid-cols-3 gap-y-8 gap-x-4">
+                        <!-- Botones del Hub de Aplicaciones -->
+                        <div class="hub-button-wrapper">
+                            <button class="hub-button" data-hub-target="hub-content-1"><svg class="w-10 h-10 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></button>
+                            <p class="hub-label text-center text-xs font-semibold text-slate-600">1. Control de Acceso y Perímetro</p>
+                        </div>
+                        <div class="hub-button-wrapper">
+                            <button class="hub-button" data-hub-target="hub-content-2"><svg class="w-10 h-10 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></button>
+                            <p class="hub-label text-center text-xs font-semibold text-slate-600">2. Gestión de Operaciones y Rondas</p>
+                        </div>
+                        <div class="hub-button-wrapper">
+                            <button class="hub-button" data-hub-target="hub-content-3"><svg class="w-10 h-10 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15.354l-6.79-6.79a2.5 2.5 0 0 0-3.536 0l-6.79 6.79a2.5 2.5 0 0 0 3.536 3.536L12 14.12l3.252 3.252a2.5 2.5 0 0 0 3.536-3.536z"></path><path d="M6.75 8.75l-3.5 3.5"></path></svg></button>
+                            <p class="hub-label text-center text-xs font-semibold text-slate-600">3. Control de Activos y Logística</p>
+                        </div>
+                        <div class="hub-button-wrapper">
+                            <button class="hub-button" data-hub-target="hub-content-4"><svg class="w-10 h-10 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
+                            <p class="hub-label text-center text-xs font-semibold text-slate-600">4. Reporte y Manejo de Incidentes</p>
+                        </div>
+                        <div class="hub-button-wrapper">
+                            <button class="hub-button" data-hub-target="hub-content-5"><svg class="w-10 h-10 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg></button>
+                            <p class="hub-label text-center text-xs font-semibold text-slate-600">5. Auditoría, Riesgos y Cumplimiento</p>
+                        </div>
+                        <div class="hub-button-wrapper">
+                            <button class="hub-button" data-hub-target="hub-content-6"><svg class="w-10 h-10 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></button>
+                            <p class="hub-label text-center text-xs font-semibold text-slate-600">6. Gestión del Servicio y Alianza</p>
+                        </div>
+                    </div>
+                    <div id="content-display" class="w-full lg:w-1/2 bg-white p-8 rounded-2xl shadow-xl min-h-[420px]">
+                        <div id="hub-content-1" class="content-panel"><h2 class="text-2xl font-bold text-slate-900 mb-2">1. Control de Acceso y Perímetro</h2><p class="text-md font-medium text-slate-500 italic mb-4">Su Primera Línea de Defensa Inteligente.</p><p class="text-slate-600 leading-relaxed mb-6">Reemplazamos los libros manuales por un sistema que estructura y formaliza la captura de datos, creando una transparencia total y auditable sobre cada movimiento y asegurando el estricto cumplimiento de sus protocolos.</p><h3 class="font-bold text-slate-800 mb-3">Aplicaciones Clave:</h3><div class="flex flex-wrap gap-2"><span class="app-tag">Control Vehicular</span><span class="app-tag">Gestión de Contratistas</span><span class="app-tag">Registro de Visitantes</span><span class="app-tag">Ingreso de Personal</span></div></div>
+                        <div id="hub-content-2" class="content-panel"><h2 class="text-2xl font-bold text-slate-900 mb-2">2. Gestión de Operaciones y Rondas</h2><p class="text-md font-medium text-slate-500 italic mb-4">Inteligencia y Eficiencia en el Terreno.</p><p class="text-slate-600 leading-relaxed mb-6">Empoderamos a nuestro personal con herramientas que automatizan la documentación de tareas, permitiéndoles enfocarse en la vigilancia activa, no en el papeleo. Cada acción queda registrada digitalmente.</p><h3 class="font-bold text-slate-800 mb-3">Aplicaciones Clave:</h3><div class="flex flex-wrap gap-2"><span class="app-tag">Supervisión Operativa</span><span class="app-tag">Minuta Virtual</span><span class="app-tag">Rondas por QR</span><span class="app-tag">Checklist de Equipos</span></div></div>
+                        <div id="hub-content-3" class="content-panel"><h2 class="text-2xl font-bold text-slate-900 mb-2">3. Control de Activos y Logística Segura</h2><p class="text-md font-medium text-slate-500 italic mb-4">Blindando su Cadena de Valor.</p><p class="text-slate-600 leading-relaxed mb-6">Aportamos una transparencia sin precedentes a cada eslabón logístico, generando datos estructurados que permiten la optimización de procesos y la drástica reducción de pérdidas.</p><h3 class="font-bold text-slate-800 mb-3">Aplicaciones Clave:</h3><div class="flex flex-wrap gap-2"><span class="app-tag">Control de Activos</span><span class="app-tag">Inspección de Vehículos</span><span class="app-tag">Auditoría de Mercancía</span><span class="app-tag">Control de Inventarios</span></div></div>
+                        <div id="hub-content-4" class="content-panel"><h2 class="text-2xl font-bold text-slate-900 mb-2">4. Reporte y Manejo de Incidentes</h2><p class="text-md font-medium text-slate-500 italic mb-4">Coordinación Instantánea, Decisiones Inteligentes.</p><p class="text-slate-600 leading-relaxed mb-6">La automatización de nuestras alertas permite una coordinación instantánea y una respuesta mejor informada. Cada reporte se convierte en un dato valioso para prevenir futuros eventos.</p><h3 class="font-bold text-slate-800 mb-3">Aplicaciones Clave:</h3><div class="flex flex-wrap gap-2"><span class="app-tag">Reporte de Incidentes</span><span class="app-tag">Alertas en Tiempo Real</span><span class="app-tag">Gestión de Novedades</span></div></div>
+                        <div id="hub-content-5" class="content-panel"><h2 class="text-2xl font-bold text-slate-900 mb-2">5. Auditoría, Riesgos y Cumplimiento</h2><p class="text-md font-medium text-slate-500 italic mb-4">Garantizando Calidad y Mitigando Riesgos.</p><p class="text-slate-600 leading-relaxed mb-6">Nuestras herramientas de diagnóstico generan una transparencia total sobre el estado de sus riesgos y el apego a las normativas (SST, protección de datos), garantizando un entorno protegido.</p><h3 class="font-bold text-slate-800 mb-3">Aplicaciones Clave:</h3><div class="flex flex-wrap gap-2"><span class="app-tag">Reporte de Condiciones Inseguras</span><span class="app-tag">Diagnósticos de Seguridad</span><span class="app-tag">Pruebas de Alcoholemia</span></div></div>
+                        <div id="hub-content-6" class="content-panel"><h2 class="text-2xl font-bold text-slate-900 mb-2">6. Gestión del Servicio y Alianza</h2><p class="text-md font-medium text-slate-500 italic mb-4">Garantizando la Calidad y el Éxito de Nuestra Alianza.</p><p class="text-slate-600 leading-relaxed mb-6">Gestionamos activamente la calidad y el cumplimiento de su contrato. Nuestra app de 'Visitas a Clientes' nos permite evaluar el desempeño operativo, recibir su calificación y asegurar que nuestros servicios evolucionen con sus necesidades.</p><h3 class="font-bold text-slate-800 mb-3">Aplicaciones Clave:</h3><div class="flex flex-wrap gap-2"><span class="app-tag">Visitas a Clientes (Calidad)</span><span class="app-tag">Solicitud de Servicios</span><span class="app-tag">Gestión de Programación</span></div></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- ================ SECCIÓN 5: ARQUITECTURA ROBUSTA ================== -->
+        <!-- =================================================================== -->
+        <section class="bg-white py-12 md:py-16">
+            <div class="container mx-auto px-4 sm:px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-2xl md:text-4xl font-extrabold g4s-blue mb-4">Potenciado por una Arquitectura Robusta</h2>
+                    <p class="max-w-3xl mx-auto text-base md:text-lg text-gray-600">Pulso no es solo un conjunto de herramientas; es un ecosistema tecnológico diseñado para ser flexible, inteligente y escalable.</p>
+                </div>
+                <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- Pilar Técnico 1 -->
+                    <div class="text-center p-6">
+                        <div class="flex justify-center mb-4">
+                            <div class="bg-g4s-red/10 rounded-full p-4">
+                                <svg class="w-10 h-10 g4s-red" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-xl g4s-blue mb-2">Ecosistema Integrado y Flexible</h3>
+                        <p class="text-gray-600">Acceda a un ecosistema modular de más de 100 aplicaciones probadas. Implementamos y escalamos funcionalidades en días, no meses, asegurando que su operación se beneficie siempre de nuestras últimas innovaciones.</p>
+                    </div>
+                    <!-- Pilar Técnico 2 -->
+                    <div class="text-center p-6">
+                        <div class="flex justify-center mb-4">
+                            <div class="bg-g4s-red/10 rounded-full p-4">
+                                <svg class="w-10 h-10 g4s-red" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-xl g4s-blue mb-2">Operación en Terreno Optimizada</h3>
+                        <p class="text-gray-600">Nuestras aplicaciones móviles cuentan con una interfaz intuitiva, formularios inteligentes y alertas en tiempo real, garantizando una captura de datos precisa y una comunicación fluida entre todo el equipo de seguridad.</p>
+                    </div>
+                    <!-- Pilar Técnico 3 -->
+                    <div class="text-center p-6">
+                        <div class="flex justify-center mb-4">
+                             <div class="bg-g4s-red/10 rounded-full p-4">
+                                <svg class="w-10 h-10 g4s-red" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" /></svg>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-xl g4s-blue mb-2">Inteligencia y Control Centralizado</h3>
+                        <p class="text-gray-600">Toda la información capturada se centraliza y transforma en inteligencia de negocio a través de dashboards visuales. Gestione perfiles de usuario y supervise la operación desde un único panel de control seguro y eficiente.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="py-12 md:py-20 bg-gray-50">
+            <div class="container mx-auto px-4 sm:px-6">
+                <div class="text-center mb-12">
+                     <h2 class="text-2xl md:text-4xl font-extrabold g4s-blue mb-4">Nuestra Presencia en Latinoamérica</h2>
+                     <p class="max-w-2xl mx-auto text-base md:text-lg text-gray-600">Conectamos operaciones a lo largo de la región, ofreciendo un estándar de seguridad unificado y de alta calidad.</p>
+                </div>
+                <div class="map-container max-w-4xl mx-auto">
+                    <div id="map-loading" class="text-center text-gray-500">Cargando mapa...</div>
+                    <svg id="latam-map" style="display: none;"></svg>
+                    <div class="tooltip" id="map-tooltip"></div>
+                </div>
+            </div>
+        </section>
+        <section class="bg-g4s-blue text-white py-12 md:py-20">
+            <div class="container mx-auto px-4 sm:px-6 text-center">
+                <h2 class="text-2xl md:text-4xl font-extrabold mb-4">Transforme su operación de seguridad de un centro de costos a un motor de inteligencia estratégica.</h2>
+                <p class="max-w-2xl mx-auto text-base md:text-lg opacity-80 mb-8">Hablemos de cómo Pulso puede fortalecer su negocio.</p>
+                <a href="#" class="cta-button inline-block text-white font-bold text-lg px-10 py-4 rounded-lg">
+                    Solicite una Demostración
+                </a>
+            </div>
+        </section>
+        <footer class="bg-gray-800">
+            <div class="container mx-auto px-4 sm:px-6 py-8 text-center text-gray-400">
+                <p>© 2024 G4S. Todos los derechos reservados.</p>
+            </div>
+        </footer>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- SCRIPT GENERAL: EFECTO 3D EN TARJETAS ---
+            function initialize3DEffect() {
+                const cards = document.querySelectorAll('.feature-card');
+                if(window.innerWidth < 768) return; // Desactivar en móvil para mejor rendimiento
+
+                const maxRotate = 8;
+                cards.forEach(card => {
+                    const newCard = card.cloneNode(true);
+                    card.parentNode.replaceChild(newCard, card);
+
+                    newCard.addEventListener('mousemove', (e) => {
+                        const rect = newCard.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        const { width, height } = rect;
+                        const rotateX = (y / height - 0.5) * -maxRotate;
+                        const rotateY = (x / width - 0.5) * maxRotate;
+                        newCard.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.03)`;
+                        newCard.style.boxShadow = '0 20px 40px -12px rgba(0,0,0,0.2)';
+                    });
+                    newCard.addEventListener('mouseleave', () => {
+                        newCard.style.transform = 'rotateX(0) rotateY(0) scale(1)';
+                        newCard.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+                    });
+                });
+            }
+            
+            // --- SCRIPT VISTA COMERCIAL: DEMO CON HISTORIA ---
+            const storyDemoSection = document.getElementById('demo-story-commercial');
+            if (storyDemoSection) {
+                const storySteps = [
+                    { step: 1, description: "Todo comienza con el oficial, que utiliza una aplicación móvil para registrar cada actividad de forma digital.", url: "https://www.appsheet.com/start/b122cafd-09e5-4aa2-b541-e41b3dcd707e", isPhone: true },
+                    { step: 2, description: "Esa información viaja a un tablero de control, donde se convierte en indicadores y análisis.", url: "https://lookerstudio.google.com/embed/reporting/06ff0b15-b04c-405b-b420-9d25d8525d70/page/p_ymp6zvhsud", isPhone: true },
+                    { step: 3, description: "Finalmente, toda la inteligencia operativa llega a usted a través de un portal web unificado y transparente.", url: "https://lookerstudio.google.com/embed/reporting/bd32a86d-b722-430d-b267-a2461005c017/page/PqtSF", isPhone: false }
+                ];
+
+                const demoFrame = document.getElementById('demo-frame-commercial');
+                const descriptionEl = document.getElementById('story-description-commercial');
+                const screenContainer = document.getElementById('screen-container-commercial');
+                const storyButtons = document.querySelectorAll('.story-btn');
+
+                function updateStory(stepNumber) {
+                    const stepData = storySteps.find(s => s.step == stepNumber);
+                    if (!stepData || !demoFrame || !descriptionEl || !screenContainer) return;
+
+                    descriptionEl.style.opacity = 0;
+                    setTimeout(() => {
+                        descriptionEl.textContent = stepData.description;
+                        descriptionEl.style.opacity = 1;
+                    }, 300);
+                    demoFrame.src = stepData.url;
+                    screenContainer.classList.toggle('phone-size', stepData.isPhone);
+                    storyButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.step == stepNumber));
+                }
+                storyButtons.forEach(button => button.addEventListener('click', () => updateStory(button.dataset.step)));
+                updateStory(1);
+            }
+
+            // --- SCRIPT VISTA COMERCIAL: MAPA INTERACTIVO (VERSIÓN CORREGIDA) ---
+            let mapInitialized = false;
+            function drawMap() {
+                if (mapInitialized) return;
+
+                const svg = d3.select("#latam-map");
+                const tooltip = d3.select("#map-tooltip");
+                const mapLoading = d3.select("#map-loading");
+                const container = d3.select(".map-container");
+
+                const latamCountryCodes = ["ARG", "BOL", "BRA", "CHL", "COL", "CRI", "CUB", "DOM", "ECU", "SLV", "GTM", "HND", "MEX", "NIC", "PAN", "PRY", "PER", "PRI", "URY", "VEN"];
+                const highlightedCountryCodes = ["COL", "ARG", "ECU", "URY"];
+                const geoJsonUrl = "https://raw.githubusercontent.com/datasets/geo-countries/main/data/countries.geojson";
+
+                // Using robust functions from user's example
+                function getCountryCode(feature) {
+                    return feature.properties.ISO_A3 || feature.properties["ISO3166-1-Alpha-3"];
+                }
+                function getCountryName(feature) {
+                    return feature.properties.ADMIN || feature.properties.name;
+                }
+
+                d3.json(geoJsonUrl).then(data => {
+                    const latamFeatures = data.features.filter(d => latamCountryCodes.includes(getCountryCode(d)));
+                    if (latamFeatures.length === 0) {
+                        mapLoading.text("Error: No se encontraron datos para LATAM.");
+                        return;
+                    }
+
+                    const latamGeoJson = { type: "FeatureCollection", features: latamFeatures };
+                    const projection = d3.geoMercator();
+                    const path = d3.geoPath().projection(projection);
+
+                    const [width, height] = [container.node().getBoundingClientRect().width, container.node().getBoundingClientRect().height];
+                    projection.fitSize([width, height], latamGeoJson);
+
+                    svg.selectAll("*").remove(); 
+
+                    svg.selectAll("path.country")
+                        .data(latamGeoJson.features).enter()
+                        .append("path")
+                        .attr("d", path)
+                        .attr("class", d => `country ${highlightedCountryCodes.includes(getCountryCode(d)) ? 'highlighted' : ''}`)
+                        .on("mouseover", (event, d) => {
+                            tooltip.html(`<strong>${getCountryName(d)}</strong>`)
+                                .style("left", (event.pageX + 10) + "px")
+                                .style("top", (event.pageY - 28) + "px").style("opacity", 1);
+                        })
+                        .on("mouseout", () => tooltip.style("opacity", 0));
+
+                    latamFeatures.forEach(d => {
+                        if (highlightedCountryCodes.includes(getCountryCode(d))) {
+                            const centroid = path.centroid(d);
+                            if (isNaN(centroid[0])) return;
+                            
+                            svg.append("circle")
+                               .attr("class", "country-point")
+                               .attr("cx", centroid[0])
+                               .attr("cy", centroid[1])
+                               .attr("r", 4);
+
+                            let labelX, labelY, lineEndX, lineEndY;
+                            let textAnchor = "start";
+
+                            // Using exact logic from user's working example
+                            switch (getCountryCode(d)) {
+                                case "COL":
+                                    labelX = centroid[0] + 50;
+                                    labelY = centroid[1] - 20;
+                                    lineEndX = centroid[0] + 40;
+                                    lineEndY = centroid[1] - 10;
+                                    break;
+                                case "ARG":
+                                    labelX = centroid[0] + 60;
+                                    labelY = centroid[1] + 10;
+                                    lineEndX = centroid[0] + 50;
+                                    lineEndY = centroid[1] + 5;
+                                    break;
+                                case "ECU":
+                                    labelX = centroid[0] - 80;
+                                    labelY = centroid[1] - 30;
+                                    lineEndX = centroid[0] - 20;
+                                    lineEndY = centroid[1] - 10;
+                                    textAnchor = "end";
+                                    break;
+                                case "URY":
+                                    labelX = centroid[0] + 70;
+                                    labelY = centroid[1] - 5;
+                                    lineEndX = centroid[0] + 60;
+                                    lineEndY = centroid[1];
+                                    break;
+                                default:
+                                    labelX = centroid[0] + 20;
+                                    labelY = centroid[1] - 10;
+                                    lineEndX = centroid[0] + 10;
+                                    lineEndY = centroid[1] - 5;
+                            }
+
+                            svg.append("line")
+                               .attr("class", "country-line")
+                               .attr("x1", centroid[0])
+                               .attr("y1", centroid[1])
+                               .attr("x2", lineEndX)
+                               .attr("y2", lineEndY);
+
+                            svg.append("text")
+                               .attr("class", "country-label")
+                               .attr("x", labelX)
+                               .attr("y", labelY)
+                               .attr("text-anchor", textAnchor)
+                               .text(getCountryName(d));
+                        }
+                    });
+
+                    svg.style("display", "block");
+                    mapLoading.style("display", "none");
+                    mapInitialized = true;
+                }).catch(error => {
+                    mapLoading.text(`Error al cargar mapa.`);
+                    console.error("Error loading map data:", error);
+                });
+            }
+
+            // --- SCRIPT PARA LA SECCIÓN DE APLICACIONES ---
+            const hubButtons = document.querySelectorAll('.hub-button');
+            const contentPanels = document.querySelectorAll('.content-panel');
+            function switchAppTab(targetId) {
+                document.querySelectorAll('.hub-label').forEach(l => l.classList.remove('active'));
+                hubButtons.forEach(btn => btn.classList.remove('active'));
+                contentPanels.forEach(panel => panel.classList.remove('active'));
+
+                const targetButton = document.querySelector(`.hub-button[data-hub-target="${targetId}"]`);
+                if (targetButton) {
+                    targetButton.classList.add('active');
+                    if (targetButton.nextElementSibling) targetButton.nextElementSibling.classList.add('active');
+                    document.getElementById(targetId)?.classList.add('active');
+                }
+            }
+            hubButtons.forEach(button => button.addEventListener('click', () => switchAppTab(button.dataset.hubTarget)));
+            if (hubButtons.length > 0) switchAppTab('hub-content-1');
+
+            // --- SCRIPT DE NAVEGACIÓN ENTRE VISTAS ---
+            const navButtons = document.querySelectorAll('.nav-tab');
+            const commercialView = document.getElementById('commercial-view');
+            const portalView = document.getElementById('portal-view');
+            function switchView(target) {
+                portalView.classList.toggle('hidden', target !== 'portal');
+                commercialView.classList.toggle('hidden', target === 'portal');
+                navButtons.forEach(btn => btn.classList.toggle('active-tab', btn.dataset.target === target));
+                if (target === 'commercial') {
+                    // Solo inicializa el mapa y los efectos 3D si la vista comercial está activa
+                    drawMap(); 
+                    initialize3DEffect();
+                }
+                window.scrollTo(0, 0);
+            }
+            navButtons.forEach(button => button.addEventListener('click', (e) => switchView(e.currentTarget.dataset.target)));
+            initialize3DEffect();
+        });
+    </script>
+</body>
+</html>
