@@ -1,0 +1,266 @@
+<script>
+  // --- ELEMENTOS DEL DOM ---
+  const contentPanel = document.getElementById('content-panel');
+  const loader = document.getElementById('loader');
+
+  // --- ESTADO DE LA APLICACIÓN ---
+  let appData = [];
+  let dashboardData = [];
+  let currentUserEmail = "";
+
+
+  /**
+  * Obtiene una propiedad de un objeto sin distinguir mayúsculas y minúsculas.
+  * @param {Object} obj El objeto del cual obtener la propiedad.
+  * @param {string} key La clave de la propiedad.
+  * @returns {*} El valor de la propiedad o undefined si no se encuentra.
+  */
+  function getCaseInsensitiveProp(obj, key) {
+    if (!obj) return undefined;
+      const lowerKey = key.toLowerCase();
+      for (const k in obj) {
+        if (k.toLowerCase() === lowerKey) {
+        return obj[k];
+        }
+      }
+    return undefined;
+  }
+
+
+  // --- INICIALIZACIÓN ---
+document.addEventListener("DOMContentLoaded", function() {
+  try {
+    setupMenuListeners();
+    loader.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    // Realizamos UNA SOLA llamada para obtener apps y paneles
+    google.script.run
+      .withSuccessHandler(onPermissionDataSuccess)
+      .withFailureHandler(onError)
+      .getAppsAndPanels();
+
+  } catch (e) {
+    onError(e);
+  }
+});
+
+
+  // --- MANEJO DE DATOS DEL SERVIDOR ---
+  function onPermissionDataSuccess(response) {
+    if (response.error) {
+      onError(new Error(response.error));
+      return;
+    }
+    
+    // Asignamos los datos a las variables globales
+    dashboardData = response.paneles || [];
+    appData = response.apps || [];
+    
+    // Obtener el email del usuario después de tener los datos de permisos
+    google.script.run
+      .withSuccessHandler(function(emailResult) {
+        currentUserEmail = emailResult;
+        document.getElementById('user-info').textContent = emailResult;
+        populateDashboardSubmenu();
+        showInicio();
+      })
+      .withFailureHandler(onError)
+      .getUserEmail();
+  }
+
+  function onError(error) {
+    contentPanel.innerHTML = `<p class="error-message"><b>Error al cargar la aplicación:</b><br>${error.message}</p>`;
+    loader.style.display = 'none';
+  }
+
+  // --- MANEJADORES DE EVENTOS (LISTENERS) ---
+  function setupMenuListeners() {
+    document.getElementById('menu-toggle').addEventListener('click', () => {
+      document.body.classList.toggle('sidebar-expanded');
+    });
+
+    document.getElementById('menu-inicio').addEventListener('click', showInicio);
+    document.getElementById('menu-apps').addEventListener('click', showAplicaciones);
+    
+    // === NUEVO LISTENER PARA EL DASHBOARD DE APPS ===
+    document.getElementById('menu-dashboard-apps').addEventListener('click', showDashboardApps);
+    
+    const tablerosParent = document.getElementById('menu-tableros-parent');
+    
+    tablerosParent.addEventListener('click', (e) => {
+    if (document.body.classList.contains('sidebar-expanded')) {
+    if (e.target.closest('.submenu-item')) return;
+      tablerosParent.classList.toggle('expanded');
+      }
+    });
+  }
+
+ // --- RENDERIZADO DE LA UI ---
+ function populateDashboardSubmenu() {
+ try {
+ const submenu = document.getElementById('tableros-submenu');
+ const parentMenu = document.getElementById('menu-tableros-parent');
+ submenu.innerHTML = '';
+
+ if (dashboardData.length === 0) {
+ parentMenu.style.display = 'none';
+ return;
+ }
+ 
+ parentMenu.style.display = 'list-item';
+ const fragment = document.createDocumentFragment();
+
+ dashboardData.forEach(item => {
+ const lookerUrl = getCaseInsensitiveProp(item, 'looker') || '';
+ const nombre = getCaseInsensitiveProp(item, 'Nombre') || '';
+ const numero = getCaseInsensitiveProp(item, 'Numero') || '';
+ const descripcion = getCaseInsensitiveProp(item, 'Descripcion') || nombre;
+ 
+ const li = document.createElement('li');
+ li.className = 'submenu-item';
+ li.dataset.url = lookerUrl;
+ li.title = descripcion;
+ li.innerHTML = `<span>${numero} ${nombre}</span>`;
+ 
+ li.addEventListener('click', function(e) {
+ e.stopPropagation();
+ setActiveSubmenuItem(this);
+ showIframeView(this.dataset.url);
+ });
+ fragment.appendChild(li);
+ });
+ submenu.appendChild(fragment);
+ } catch (e) {
+ onError(new Error("Ocurrió un error al mostrar la lista de tableros."));
+ }
+ }
+
+function showInicio() {
+  loader.style.display = 'flex'; 
+  google.script.run
+    .withSuccessHandler(function(url) {
+      showIframeView(url, 'menu-inicio');
+    })
+    .withFailureHandler(onError)
+    .obtenerUrlInicio();
+}
+
+// === NUEVA FUNCIÓN PARA MOSTRAR EL DASHBOARD DE APPS ===
+function showDashboardApps() {
+  loader.style.display = 'flex';
+  google.script.run
+    .withSuccessHandler(function(url) {
+      showIframeView(url, 'menu-dashboard-apps');
+    })
+    .withFailureHandler(onError)
+    .obtenerUrlDashboardAppsnicio()
+}
+
+ function showAplicaciones() {
+ setActiveMenuItem('menu-apps');
+ 
+ contentPanel.innerHTML = `
+ <div class="view-header">
+ <input type="text" id="app-search-input" placeholder="Buscar aplicaciones...">
+ </div>
+ <div id="app-card-container"></div>
+ `;
+
+ renderAppCards(appData);
+
+ document.getElementById('app-search-input').addEventListener('input', (e) => {
+ const searchTerm = e.target.value.toLowerCase();
+ const filteredApps = appData.filter(app => {
+ const nombre = (getCaseInsensitiveProp(app, 'Nombre') || '').toLowerCase();
+ const descripcion = (getCaseInsensitiveProp(app, 'Descripcion') || '').toLowerCase();
+ return nombre.includes(searchTerm) || descripcion.includes(searchTerm);
+ });
+ renderAppCards(filteredApps);
+ });
+
+ loader.style.display = 'none';
+ }
+
+ function renderAppCards(apps) {
+ const container = document.getElementById('app-card-container');
+ if (!container) return;
+
+ if (apps.length === 0) {
+ container.innerHTML = `<div class="empty-state"><h3>No se encontraron aplicaciones.</h3></div>`;
+ return;
+ }
+
+ let cardHtml = '<div class="card-container">';
+ cardHtml += apps.map(app => {
+ const ICONO_POR_DEFECTO_APP = "https://i.imgur.com/O1hA4Jv.png";
+ const appId = getCaseInsensitiveProp(app, 'App') || '';
+ const nombre = getCaseInsensitiveProp(app, 'Nombre') || '';
+ const numero = getCaseInsensitiveProp(app, 'Numero') || '';
+ const descripcion = (getCaseInsensitiveProp(app, 'Descripcion') || 'Sin descripción.').substring(0, 100);
+ let imgSrc = getCaseInsensitiveProp(app, 'Imagen');
+ if (!imgSrc || String(imgSrc).trim() === '') imgSrc = ICONO_POR_DEFECTO_APP;
+ return `<a class="card" href="https://www.appsheet.com/start/${appId}" target="_blank" title="${nombre}">
+ <div class="card-icon-wrapper">
+ <img src="${imgSrc}" alt="Icono de aplicación" onerror="this.onerror=null; this.src='${ICONO_POR_DEFECTO_APP}';">
+ </div>
+ <div class="card-content">
+ <h3 class="card-title">${numero} ${nombre}</h3>
+ <p class="card-description">${descripcion}</p>
+ </div>
+ </a>`;
+ }).join('');
+ cardHtml += '</div>';
+ 
+ container.innerHTML = cardHtml;
+ }
+
+ // **MODIFICADO**: Se ajusta la lógica para manejar tanto tableros como la página de inicio.
+  function showIframeView(url, menuId) {
+    const activeMenuId = menuId || 'menu-tableros-parent';
+    setActiveMenuItem(activeMenuId);
+    
+    loader.style.display = 'flex';
+    contentPanel.innerHTML = `
+    <div class="iframe-container">
+    <iframe id="content-frame" src="${url}" frameborder="0"></iframe>
+    </div>
+    `;
+    const iframe = document.getElementById('content-frame');
+
+    const timer = setTimeout(() => {
+      loader.style.display = 'none';
+    }, 5000);
+
+    iframe.onload = () => {
+      clearTimeout(timer); // Cancela el temporizador si el iframe carga correctamente.
+      loader.style.display = 'none';
+    };
+
+    iframe.onerror = () => {
+    clearTimeout(timer);
+    contentPanel.innerHTML = `<p class="error-message">No se pudo cargar el contenido.</p>`;
+    loader.style.display = 'none';
+    };
+  }
+
+  function setActiveMenuItem(menuId) {
+    document.querySelectorAll('.main-menu-item').forEach(item => item.classList.remove('active'));
+      if (document.getElementById(menuId)) {
+        document.getElementById(menuId).classList.add('active');
+      }
+      if (menuId !== 'menu-tableros-parent') {
+        document.getElementById('menu-tableros-parent').classList.remove('expanded');
+        document.querySelectorAll('.submenu-item').forEach(item => item.classList.remove('active'));
+    }
+  }
+ 
+  function setActiveSubmenuItem(element) {
+    document.querySelectorAll('.submenu-item').forEach(item => item.classList.remove('active'));
+    element.classList.add('active');
+  }
+
+  function include(filename) {
+    return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  }
+
+ </script>
