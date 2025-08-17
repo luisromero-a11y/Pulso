@@ -1,10 +1,10 @@
-
 <style>
  /* --- VARIABLES GLOBALES DE ESTILO --- */
  :root {
  --red-600: #fd3c3d;
+ --blue-600: #2563eb;
  --slate-900: #0f172a;
- --slate-800: #1e293b;
+ --slate-800: #1e2b3b;
  --slate-600: #475569;
  --slate-500: #64748b;
  --slate-400: #94a3b8;
@@ -42,7 +42,6 @@
  right: 0;
  height: var(--topbar-height);
  background-color: var(--white);
- /*border-bottom: 1px solid var(--slate-200);*/
  display: flex;
  align-items: center;
  justify-content: space-between;
@@ -62,6 +61,50 @@
  background-color: var(--white);
  }
 
+/* ======================================================= */
+/* INICIO DE NUEVOS ESTILOS PARA FILTRO DE CLIENTE */
+/* ======================================================= */
+.top-bar-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px; /* Espacio entre el filtro y el perfil */
+}
+
+.client-filter-select {
+  height: 40px;
+  padding: 0 36px 0 16px; /* Espacio extra a la derecha para la flecha */
+  border-radius: 20px;
+  border: 1px solid var(--slate-200);
+  background-color: var(--slate-50);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slate-800);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.client-filter-select:hover {
+  background-color: var(--slate-100);
+}
+
+.client-filter-select:focus {
+  outline: none;
+  border-color: var(--blue-600);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+/* ======================================================= */
+/* FIN DE NUEVOS ESTILOS */
+/* ======================================================= */
+
+
 /* Contenedor del perfil de usuario */
 .user-profile {
     display: flex;
@@ -75,7 +118,6 @@
     transition: all 0.2s ease-in-out;
 }
 
-/* Efecto al pasar el cursor */
 .user-profile:hover {
     background-color: var(--slate-100);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -107,7 +149,6 @@
     color: var(--slate-500);
 }
 
-/* Sidebar colapsado: oculta el nombre y mejora visual */
 body:not(.sidebar-expanded) .user-name {
  display: none;
 }
@@ -127,7 +168,6 @@ body:not(.sidebar-expanded) .user-profile {
  width: var(--sidebar-width-collapsed);
  height: 100vh;
  background-color: var(--white);
- /* border-right: 1px solid var(--slate-200); */
  display: flex;
  flex-direction: column;
  z-index: 1000;
@@ -137,7 +177,6 @@ body:not(.sidebar-expanded) .user-profile {
 
  body.sidebar-expanded .sidebar {
  width: var(--sidebar-width-expanded);
- background-color: var(--white);
  }
 
  .sidebar-header {
@@ -151,7 +190,6 @@ body:not(.sidebar-expanded) .user-profile {
 
  body.sidebar-expanded .sidebar-header {
  justify-content: flex-start;
- background-color: var(--white);
  }
 
  .app-logo {
@@ -171,12 +209,8 @@ body:not(.sidebar-expanded) .user-profile {
  color: #003968;
  margin: 0;
  white-space: nowrap;
- opacity: 1;
- transition: opacity var(--transition-speed) ease;
- }
-
- .app-title {
  opacity: 0;
+ transition: opacity var(--transition-speed) ease;
  }
 
  body.sidebar-expanded .app-title {
@@ -184,38 +218,36 @@ body:not(.sidebar-expanded) .user-profile {
  }
 
  .sidebar-footer {
- display: flex;
- align-items: center;
- justify-content: flex-start;
- padding: 4px 8px; 
- flex-shrink: 0;
- gap: 4px; 
- flex-direction: column;
- width: 100%;
- box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  flex-shrink: 0;
  }
 
  .app-logo-footer {
- display: none;
+  display: none;
  }
 
  body.sidebar-expanded .app-logo-footer {
- display: block;
- width: 100%;
- height: 300px;
- object-fit: scale-down;
- margin: 0;
- border-radius: 20px;
- opacity: 0.9;
-}
+  display: block;
+  width: 100%;
+  height: 300px;
+  object-fit: scale-down;
+  margin: 0;
+  border-radius: 20px;
+  opacity: 0.9;
+ }
+
 
  /* --- MENÚ PRINCIPAL --- */
  .main-menu {
- flex-grow: 1;
- overflow-y: auto;
- list-style: none;
- margin: 0;
- padding: 16px 12px;
+  flex-grow: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 16px 12px;
+  min-height: 0;
  }
 
  .main-menu-item > div {
@@ -272,13 +304,13 @@ body:not(.sidebar-expanded) .user-profile {
  .submenu {
  list-style: none;
  padding-left: 12px;
- margin-top: 4px;
+ margin-top: 8px;
  max-height: 0;
  overflow: hidden;
  transition: max-height 0.4s ease-out;
  }
  .main-menu-item.expanded .submenu {
- max-height: 500px;
+ max-height: 10000px;
  }
 
  .submenu-item {
@@ -316,14 +348,16 @@ body:not(.sidebar-expanded) .user-profile {
 
  /* --- CONTENIDO PRINCIPAL --- */
  .main-content {
- height: calc(100vh - var(--topbar-height));
- margin-top: var(--topbar-height);
- margin-left: var(--sidebar-width-collapsed);
- flex-grow: 1;
- position: relative;
- background-color: var(--white); /* Fondo blanco */
- padding: 20px; /* Padding para separar la card del borde */
- box-sizing: border-box;
+  height: calc(100vh - var(--topbar-height));
+  margin-top: var(--topbar-height);
+  margin-left: var(--sidebar-width-collapsed);
+  flex-grow: 1;
+  position: relative;
+  background-color: #f1f5f9;
+  padding: 40px;
+  box-sizing: border-box;
+  transition: margin-left var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 20px;
 }
 
 body.sidebar-expanded .main-content {
@@ -333,21 +367,22 @@ body.sidebar-expanded .main-content {
 #content-panel {
  width: 100%;
  height: 100%;
- background-color: var(--slate-300); /* Fondo gris más fuerte */
+ background-color: #f1f5f9;
  border-radius: 20px;
- padding: 24px;
  box-sizing: border-box;
  overflow-y: auto;
+ padding: 24px;
 }
+
  .view-header {
- padding: 24px 32px 0 32px;
+ padding-bottom: 24px;
  }
 
  #app-search-input {
  width: 100%;
  padding: 12px 16px;
  border-radius: var(--border-radius);
- border: 1px solid var(--white);
+ border: 1px solid var(--slate-200);
  font-size: 1em;
  box-sizing: border-box;
  transition: border-color 0.2s, box-shadow 0.2s;
@@ -361,13 +396,12 @@ body.sidebar-expanded .main-content {
 .card-container {
  display: grid;
  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
- padding: 32px;
  gap: 24px;
 }
 
 .card {
  background-color: var(--white);
- border: 2px solid var(--slate-200);
+ border: 1px solid var(--slate-200);
  border-radius: 16px;
  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
  padding: 24px;
@@ -381,13 +415,13 @@ body.sidebar-expanded .main-content {
 .card:hover {
  transform: translateY(-6px);
  border-color: var(--blue-600);
- box-shadow: 0 12px 24px rgba(5, 143, 208, 0.15);
+ box-shadow: 0 12px 24px rgba(37, 99, 235, 0.1);
 }
 
 .card-icon-wrapper {
  width: 72px;
  height: 72px;
- border-radius: 50%; /* Imagen circular */
+ border-radius: 50%;
  background-color: var(--slate-100);
  overflow: hidden;
  display: flex;
@@ -424,17 +458,19 @@ body.sidebar-expanded .main-content {
  margin-top: auto;
  text-align: left;
 }
- /* --- VISTA DE IFRAME --- */
+ 
  .iframe-container {
- padding: 32px;
- height: 100%;
+ margin: -24px; 
+ width: calc(100% + 48px);
+ height: calc(100% + 48px);
  box-sizing: border-box;
  }
+ 
  #content-frame {
  width: 100%;
  height: 100%;
- border: 1px solid var(--slate-200);
- border-radius: var(--border-radius);
+ border: none;
+ border-radius: 20px;
  }
 
  /* --- MENSAJES Y ESTADOS VACÍOS --- */
@@ -461,25 +497,4 @@ body.sidebar-expanded .main-content {
  z-index: 10;
  }
 
- .spinner {
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  width: 36px;
-  height: 36px;
-  border-right: 4px
-  border-radius: 50%;
-  border-left-color: #09f; 
-  animation: spin 1s ease infinite;
-  margin: 0 auto 10px;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
 </style>
-
-
