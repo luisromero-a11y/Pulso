@@ -6,16 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulso</title>
 
-  <link rel="icon" href="https://asset.brandfetch.io/idvdGl5Oej/idY2feC_2F.png">
-
+  <link rel="icon" href="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Ff0b05aac.FOTOGRAFIA.153703.png">
   
+  <!-- Estilos principales de la aplicación -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
+  
+  <!-- Scripts globales cargados una sola vez -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Arial&display=swap" rel="stylesheet">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  
   <?!= include('Stylesheet'); ?>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
 </head>
 
@@ -29,11 +34,18 @@
       </svg>
     </div>
 
-    <div class="user-profile" id="user-profile-toggle">
-      <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Fada2e1fb.FOTOGRAFIA.144427.png" alt="Avatar Usuario" class="user-avatar">
-      <div class="user-details">
-        <span class="user-name" id="user-name-display">Usuario</span>
-        <span class="user-role" id="user-info"></span>
+    <!-- Contenedor para los controles de la derecha -->
+    <div class="top-bar-right-controls">
+      
+      <!-- NUEVO: Lista desplegable para el filtro de cliente -->
+      <select id="client-filter" class="client-filter-select" style="display: none;"></select>
+      
+      <div class="user-profile" id="user-profile-toggle">
+        <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Fada2e1fb.FOTOGRAFIA.144427.png" alt="Avatar Usuario" class="user-avatar">
+        <div class="user-details">
+          <span class="user-name" id="user-name-display">Usuario</span>
+          <span class="user-role" id="user-info">Cargando...</span>
+        </div>
       </div>
     </div>
   </header>
