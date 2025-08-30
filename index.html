@@ -27,7 +27,7 @@
 <body>
   <header class="top-bar">
       <div class="menu-toggle" id="menu-toggle">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="3" y1="12" x2="21" y2="12"></line>
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -38,19 +38,19 @@
       <div class="top-bar-right-controls" style="display: flex; align-items: center; margin-left: auto;">
         
         <!-- ====================================================== -->
-        <!-- INICIO DEL FILTRO DE CLIENTE (ESTE ES EL CÓDIGO QUE FALTA) -->
+        <!-- INICIO DEL CÓDIGO AÑADIDO: Filtro de Cliente y Sitios -->
         <!-- ====================================================== -->
         
-        <!-- Este DIV con id="client-filter" es el "ancla" que necesita el JavaScript -->
+        <!-- Este DIV es el contenedor para el filtro de búsqueda de cliente -->
         <div id="client-filter" style="margin-right: 16px;">
           <input type="text" id="client-search" list="client-list-data" placeholder="Cargando clientes..." style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--slate-300); min-width: 200px; max-width: 250px; display: none;">
           <datalist id="client-list-data"></datalist>
         </div>
-        
-        <!-- El JavaScript buscará el div de arriba y añadirá el filtro de sitios a su lado -->
+
+        <!-- El JavaScript creará el filtro de sitios y lo insertará después del div 'client-filter' -->
 
         <!-- ====================================================== -->
-        <!-- FIN DEL FILTRO DE CLIENTE -->
+        <!-- FIN DEL CÓDIGO AÑADIDO -->
         <!-- ====================================================== -->
         
         <div class="user-profile" id="user-profile-toggle">
@@ -61,8 +61,8 @@
           </div>
         </div>
       </div>
-  </header>
-  
+    </header>
+
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Fb35cf25d.FOTOGRAFIA.215741.png" alt="Logo Pulso" class="app-logo">
