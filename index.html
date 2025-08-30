@@ -26,30 +26,43 @@
 
 <body>
   <header class="top-bar">
-    <div class="menu-toggle" id="menu-toggle">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="3" y1="12" x2="21" y2="12"></line>
-        <line x1="3" y1="6" x2="21" y2="6"></line>
-        <line x1="3" y1="18" x2="21" y2="18"></line>
-      </svg>
-    </div>
+      <div class="menu-toggle" id="menu-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </div>
 
-    <!-- Contenedor para los controles de la derecha -->
-    <div class="top-bar-right-controls">
-      
-      <!-- NUEVO: Lista desplegable para el filtro de cliente -->
-      <select id="client-filter" class="client-filter-select" style="display: none;"></select>
-      
-      <div class="user-profile" id="user-profile-toggle">
-        <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Fada2e1fb.FOTOGRAFIA.144427.png" alt="Avatar Usuario" class="user-avatar">
-        <div class="user-details">
-          <span class="user-name" id="user-name-display">Usuario</span>
-          <span class="user-role" id="user-info">Cargando...</span>
+      <!-- Contenedor para los controles de la derecha -->
+      <div class="top-bar-right-controls" style="display: flex; align-items: center; margin-left: auto;">
+        
+        <!-- ====================================================== -->
+        <!-- INICIO DEL FILTRO DE CLIENTE (ESTE ES EL CÓDIGO QUE FALTA) -->
+        <!-- ====================================================== -->
+        
+        <!-- Este DIV con id="client-filter" es el "ancla" que necesita el JavaScript -->
+        <div id="client-filter" style="margin-right: 16px;">
+          <input type="text" id="client-search" list="client-list-data" placeholder="Cargando clientes..." style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--slate-300); min-width: 200px; max-width: 250px; display: none;">
+          <datalist id="client-list-data"></datalist>
+        </div>
+        
+        <!-- El JavaScript buscará el div de arriba y añadirá el filtro de sitios a su lado -->
+
+        <!-- ====================================================== -->
+        <!-- FIN DEL FILTRO DE CLIENTE -->
+        <!-- ====================================================== -->
+        
+        <div class="user-profile" id="user-profile-toggle">
+          <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Fada2e1fb.FOTOGRAFIA.144427.png" alt="Avatar Usuario" class="user-avatar">
+          <div class="user-details">
+            <span class="user-name" id="user-name-display">Usuario</span>
+            <span class="user-role" id="user-info">Cargando...</span>
+          </div>
         </div>
       </div>
-    </div>
   </header>
-
+  
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Fb35cf25d.FOTOGRAFIA.215741.png" alt="Logo Pulso" class="app-logo">
@@ -74,7 +87,7 @@
             <path d="M18 20V4"></path>
             <path d="M6 20V16"></path>
           </svg>
-          <span>Pulso Global</span>
+          <span>Pulse Global</span>
         </div>
       </li>
 
@@ -108,7 +121,7 @@
     </ul>
 
     <div class="sidebar-footer">
-      <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2F213d1631.FOTOGRAFIA.030646.png" alt="Logo" class="app-logo-footer">
+      <img src="https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2F8b0247cc.FOTOGRAFIA.165705.png" alt="Logo" class="app-logo-footer">
     </div>
   </aside>
 
