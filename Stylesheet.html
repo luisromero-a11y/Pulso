@@ -497,4 +497,59 @@ body.sidebar-expanded .main-content {
  z-index: 10;
  }
 
+/* ======================================================
+//        NUEVOS ESTILOS PARA EL FILTRO MULTI-SELECCIÓN
+// ====================================================== */
+.multi-select-container {
+  position: relative;
+  min-width: 200px;
+  max-width: 250px;
+  display: none; /* Oculto por defecto */
+}
+.multi-select-button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--slate-300);
+  background-color: white;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.multi-select-button::after {
+  content: '▼';
+  font-size: 0.6em;
+  margin-left: 8px;
+}
+.multi-select-dropdown {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  width: 100%;
+  background-color: white;
+  border: 1px solid var(--slate-300);
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  z-index: 1002;
+  max-height: 250px;
+  overflow-y: auto;
+  display: none;
+}
+.multi-select-dropdown.active {
+  display: block;
+}
+.multi-select-dropdown label {
+  display: block;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.multi-select-dropdown label:hover {
+  background-color: var(--slate-100);
+}
+.multi-select-dropdown input {
+  margin-right: 8px;
+}
+
 </style>
