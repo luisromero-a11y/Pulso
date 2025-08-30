@@ -58,37 +58,24 @@
         return onDataError(new Error(response.error));
       }
       
-      // 1. Guardar todos los datos recibidos en las variables globales
-      appData = response.apps || [];
+      // Guardar todos los datos recibidos en las variables globales
       dashboardData = response.paneles || [];
+      appData = response.apps || [];
       currentUserEmail = response.userEmail || "";
       urlDashboardApps = response.urlDashboardApps || "";
       urlClienteDashboardBase = response.urlClienteDashboardBase || "";
       clientList = response.clientes || [];
+      siteList = response.sites || []; // <-- CORRECCIÓN: Guardar la lista inicial de sitios
 
-      // 2. Actualizar la información del perfil de usuario
+      // Actualizar la información del perfil de usuario
       document.getElementById('user-info').textContent = currentUserEmail;
       document.getElementById('user-name-display').textContent = currentUserEmail.split('@')[0];
       
-      // 3. Poblar los elementos de la UI
+      // Poblar los elementos de la UI con los datos recibidos
       populateDashboardSubmenu();
-      populateClientSelector(); // Se llena el <select> de clientes
-      
-      // 4. Aplicar la última selección guardada del usuario
-      const savedClientId = localStorage.getItem('lastSelectedClientId');
-      const clientSelector = document.getElementById('top-client-selector');
+      populateClientFilter();
+      populateSiteFilter(); // <-- CORRECCIÓN: Llamar para poblar los sitios desde el principio
 
-      if (savedClientId && clientSelector) {
-          // Si encontramos un cliente guardado en localStorage, lo aplicamos...
-          clientSelector.value = savedClientId;
-          // ...y disparamos el evento 'change' para que se carguen los datos y sitios de ese cliente.
-          // Esto inicia la cadena de carga (handleClientChange -> onFilteredDataSuccess -> onSitesLoaded).
-          clientSelector.dispatchEvent(new Event('change'));
-      } else if (clientSelector) {
-          // Si no hay nada guardado, cargamos los datos para la selección por defecto
-          // (que será "@Cliente Demo" o el primer cliente de la lista).
-          handleClientChange({ target: clientSelector }); // Simula un evento de cambio
-      }
   }
   
   function onFilteredDataSuccess(filteredData) {
@@ -538,82 +525,44 @@
       if (sites.error) { return onError(new Error(sites.error)); }
       siteList = sites;
       populateSiteFilter();
-      
-      // --- CORRECCIÓN CLAVE: Aplicar la selección de sitios guardada ---
-      const savedSitesRaw = localStorage.getItem('lastSelectedSiteIds');
-      if (savedSitesRaw) {
-          try {
-              const savedSites = JSON.parse(savedSitesRaw);
-              const allCheckboxes = document.querySelectorAll('#top-site-selector-dropdown input');
-              allCheckboxes.forEach(checkbox => {
-                  if (savedSites.includes(checkbox.value)) {
-                      checkbox.checked = true;
-                  }
-              });
-              updateSiteFilterDisplay(); // Actualizar el texto del botón
-          } catch (e) { console.error("Error al parsear sitios guardados:", e); }
-      }
-
-      loader.style.display = 'none';
+      loader.style.display = 'none'; // El spinner se oculta aquí
   }
+
   /**
    * Llena el selector de sitios con los datos recibidos
    */
   function populateSiteFilter() {
       const dropdown = document.getElementById('top-site-selector-dropdown');
       if (!dropdown || !topSiteSelectorContainer) return;
-      
-      dropdown.innerHTML = ''; // Limpiar opciones anteriores
-      
+      dropdown.innerHTML = '';
       if (siteList.length > 0) {
         siteList.forEach(site => {
           const label = document.createElement('label');
           const checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
           checkbox.value = site.id;
-          
-          // Añadir el listener que actualiza el texto y guarda la selección
-          checkbox.addEventListener('change', () => {
-              updateSiteFilterDisplay();
-              saveSiteSelection();
-          });
-          
+          checkbox.addEventListener('change', updateSiteFilterDisplay);
           label.appendChild(checkbox);
           label.appendChild(document.createTextNode(' ' + site.name));
           dropdown.appendChild(label);
         });
-        
-        topSiteSelectorContainer.style.display = 'block'; // Mostrar el filtro de sitios
-        updateSiteFilterDisplay(); // Actualizar el texto del botón por si acaso
+        topSiteSelectorContainer.style.display = 'block';
+        updateSiteFilterDisplay();
       } else {
-        resetAndHideSiteFilter(); // Ocultar si no hay sitios
+        resetAndHideSiteFilter();
       }
   }
 
   /**
-   * Guarda la selección actual de sitios en el localStorage.
-   */
-  function saveSiteSelection() {
-      const selectedSites = Array.from(document.querySelectorAll('#top-site-selector-dropdown input:checked'))
-                                .map(cb => cb.value);
-      localStorage.setItem('lastSelectedSiteIds', JSON.stringify(selectedSites));
-  }
-
-  /**
-   * Actualiza el texto del botón del filtro de sitios para reflejar la selección.
+   * Actualiza el texto del botón del filtro de sitios.
    */
   function updateSiteFilterDisplay() {
       const button = document.getElementById('top-site-selector-button');
-      if (!button) return;
-      
       const checkboxes = document.querySelectorAll('#top-site-selector-dropdown input:checked');
-      
       if (checkboxes.length === 0 || checkboxes.length === siteList.length) {
         button.textContent = 'Todos los Sitios';
       } else if (checkboxes.length === 1) {
-        const selectedSiteName = siteList.find(site => site.id === checkboxes[0].value)?.name || '1 sitio seleccionado';
-        // Truncar el nombre si es muy largo para que quepa en el botón
-        button.textContent = selectedSiteName.length > 20 ? selectedSiteName.substring(0, 17) + '...' : selectedSiteName;
+        button.textContent = '1 sitio seleccionado';
       } else {
         button.textContent = `${checkboxes.length} sitios seleccionados`;
       }
@@ -626,20 +575,6 @@
       if (!topSiteSelectorContainer) return;
       siteList = [];
       topSiteSelectorContainer.style.display = 'none';
-  }
-
-  function handleClientChange(e) {
-      const selectedClientId = e.target.value;
-      
-      // --- CORRECCIÓN CLAVE: Guardar la selección ---
-      localStorage.setItem('lastSelectedClientId', selectedClientId);
-      // Limpiar los sitios guardados, ya que pertenecen al cliente anterior
-      localStorage.removeItem('lastSelectedSiteIds');
-
-      showInicio();
-      loader.style.display = 'flex';
-      
-      // ... el resto de tu función `handleClientChange` (con Promise.all) no cambia ...
   }
 
 
