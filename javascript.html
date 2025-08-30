@@ -2,255 +2,505 @@
   // --- ELEMENTOS DEL DOM ---
   const contentPanel = document.getElementById('content-panel');
   const loader = document.getElementById('loader');
+  const clientFilter = document.getElementById('client-filter'); 
 
   // --- ESTADO DE LA APLICACIÓN ---
+  let inicioHtmlContent = null;
   let appData = [];
   let dashboardData = [];
   let currentUserEmail = "";
+  let urlDashboardApps = "";
+  let clientList = [];
 
+  let siteList = []; // Para guardar la lista de sitios actual
+  let topSiteSelectorContainer; // Para el nuevo contenedor del filtro de sitios
+  
 
   /**
   * Obtiene una propiedad de un objeto sin distinguir mayúsculas y minúsculas.
-  * @param {Object} obj El objeto del cual obtener la propiedad.
-  * @param {string} key La clave de la propiedad.
-  * @returns {*} El valor de la propiedad o undefined si no se encuentra.
   */
   function getCaseInsensitiveProp(obj, key) {
     if (!obj) return undefined;
-      const lowerKey = key.toLowerCase();
-      for (const k in obj) {
-        if (k.toLowerCase() === lowerKey) {
+    const lowerKey = key.toLowerCase();
+    for (const k in obj) {
+      if (k.toLowerCase() === lowerKey) {
         return obj[k];
-        }
       }
+    }
     return undefined;
   }
 
-
   // --- INICIALIZACIÓN ---
-document.addEventListener("DOMContentLoaded", function() {
-  try {
-    setupMenuListeners();
-    loader.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-
-    // Realizamos UNA SOLA llamada para obtener apps y paneles
-    google.script.run
-      .withSuccessHandler(onPermissionDataSuccess)
-      .withFailureHandler(onError)
-      .getAppsAndPanels();
-
-  } catch (e) {
-    onError(e);
-  }
-});
+  document.addEventListener("DOMContentLoaded", function() {
+    try {
+      createTopSelectors(); 
+      setupMenuListeners();
+      loader.innerHTML = '<i class="fa-solid fa-spinner fa-spin fa-2x"></i>';
+      google.script.run.withSuccessHandler(onInicioHtmlSuccess).withFailureHandler(onError).getInicioHtml();
+      google.script.run.withSuccessHandler(onInitialDataSuccess).withFailureHandler(onDataError).getInitialData();
+    } catch (e) {
+      onError(e);
+    }
+  });
 
 
   // --- MANEJO DE DATOS DEL SERVIDOR ---
-  function onPermissionDataSuccess(response) {
-    if (response.error) {
-      onError(new Error(response.error));
-      return;
-    }
-    
-    // Asignamos los datos a las variables globales
-    dashboardData = response.paneles || [];
-    appData = response.apps || [];
-    
-    // Obtener el email del usuario después de tener los datos de permisos
-    google.script.run
-      .withSuccessHandler(function(emailResult) {
-        currentUserEmail = emailResult;
-        document.getElementById('user-info').textContent = emailResult;
-        populateDashboardSubmenu();
-        showInicio();
-      })
-      .withFailureHandler(onError)
-      .getUserEmail();
+  function onInicioHtmlSuccess(html) {
+    inicioHtmlContent = html;
+    contentPanel.innerHTML = inicioHtmlContent;
+    setActiveMenuItem('menu-inicio');
+    loader.style.display = 'none';
+    initializeInicioView();
+  }
+
+  function onInitialDataSuccess(response) {
+      if (response.error) {
+        return onDataError(new Error(response.error));
+      }
+      
+      // 1. Guardar todos los datos recibidos en las variables globales
+      appData = response.apps || [];
+      dashboardData = response.paneles || [];
+      currentUserEmail = response.userEmail || "";
+      urlDashboardApps = response.urlDashboardApps || "";
+      urlClienteDashboardBase = response.urlClienteDashboardBase || "";
+      clientList = response.clientes || [];
+
+      // 2. Actualizar la información del perfil de usuario
+      document.getElementById('user-info').textContent = currentUserEmail;
+      document.getElementById('user-name-display').textContent = currentUserEmail.split('@')[0];
+      
+      // 3. Poblar los elementos de la UI
+      populateDashboardSubmenu();
+      populateClientSelector(); // Se llena el <select> de clientes
+      
+      // 4. Aplicar la última selección guardada del usuario
+      const savedClientId = localStorage.getItem('lastSelectedClientId');
+      const clientSelector = document.getElementById('top-client-selector');
+
+      if (savedClientId && clientSelector) {
+          // Si encontramos un cliente guardado en localStorage, lo aplicamos...
+          clientSelector.value = savedClientId;
+          // ...y disparamos el evento 'change' para que se carguen los datos y sitios de ese cliente.
+          // Esto inicia la cadena de carga (handleClientChange -> onFilteredDataSuccess -> onSitesLoaded).
+          clientSelector.dispatchEvent(new Event('change'));
+      } else if (clientSelector) {
+          // Si no hay nada guardado, cargamos los datos para la selección por defecto
+          // (que será "@Cliente Demo" o el primer cliente de la lista).
+          handleClientChange({ target: clientSelector }); // Simula un evento de cambio
+      }
+  }
+  
+  function onFilteredDataSuccess(filteredData) {
+      if (filteredData.error) { return onError(new Error(filteredData.error)); }
+      dashboardData = filteredData.paneles || [];
+      appData = filteredData.apps || [];
+      populateDashboardSubmenu();
+      if (document.getElementById('app-card-container')) {
+        renderAppCards(appData);
+      }
+      // Ya no oculta el loader aquí
+  }
+
+  function onDataError(error) {
+      console.error("Error cargando datos de la app:", error);
+      document.getElementById('user-info').textContent = "Error de datos";
   }
 
   function onError(error) {
-    contentPanel.innerHTML = `<p class="error-message"><b>Error al cargar la aplicación:</b><br>${error.message}</p>`;
+    contentPanel.innerHTML = `<p class="error-message"><b>Error crítico:</b><br>${error.message}</p>`;
     loader.style.display = 'none';
   }
 
-  // --- MANEJADORES DE EVENTOS (LISTENERS) ---
+  // --- MANEJADORES DE EVENTOS Y RENDERIZADO ---
+  
   function setupMenuListeners() {
     document.getElementById('menu-toggle').addEventListener('click', () => {
       document.body.classList.toggle('sidebar-expanded');
     });
-
     document.getElementById('menu-inicio').addEventListener('click', showInicio);
     document.getElementById('menu-apps').addEventListener('click', showAplicaciones);
-    
-    // === NUEVO LISTENER PARA EL DASHBOARD DE APPS ===
     document.getElementById('menu-dashboard-apps').addEventListener('click', showDashboardApps);
-    
     const tablerosParent = document.getElementById('menu-tableros-parent');
-    
     tablerosParent.addEventListener('click', (e) => {
-    if (document.body.classList.contains('sidebar-expanded')) {
-    if (e.target.closest('.submenu-item')) return;
-      tablerosParent.classList.toggle('expanded');
+      if (document.body.classList.contains('sidebar-expanded')) {
+        if (e.target.closest('.submenu-item')) return;
+        tablerosParent.classList.toggle('expanded');
       }
     });
+    const clientSearchInput = document.getElementById('client-search');
+    if (clientSearchInput) {
+        clientSearchInput.addEventListener('change', handleClientChange);
+    }
+  }
+  
+  // =======================================================
+  // INICIO DE LA CORRECCIÓN FINAL Y DEFINITIVA
+  // =======================================================
+  function handleClientChange(e) {
+      const selectedName = e.target.value.trim();
+      showInicio();
+      loader.style.display = 'flex';
+      
+      let clientIdForFilter = 'Todos';
+      let clientIdsForSites = [];
+
+      if (selectedName !== "" && selectedName !== "Todos los Clientes" && selectedName !== "@Cliente Demo") {
+          const selectedClient = clientList.find(client => client.name === selectedName);
+          if (selectedClient) {
+              clientIdForFilter = selectedClient.id;
+              clientIdsForSites = [selectedClient.id];
+          }
+      } else {
+          clientIdsForSites = clientList.filter(c => c.id !== 'demo').map(c => c.id);
+      }
+      
+      // SIMPLIFICADO: Llamamos a ambas funciones una tras otra
+      google.script.run.withSuccessHandler(onFilteredDataSuccess).getDataForClient(clientIdForFilter);
+      google.script.run.withSuccessHandler(onSitesLoaded).getSitesForClient(clientIdsForSites);
   }
 
- // --- RENDERIZADO DE LA UI ---
- function populateDashboardSubmenu() {
- try {
- const submenu = document.getElementById('tableros-submenu');
- const parentMenu = document.getElementById('menu-tableros-parent');
- submenu.innerHTML = '';
+  function populateClientFilter() {
+    const clientSearchInput = document.getElementById('client-search');
+    const clientDatalist = document.getElementById('client-list-data');
+    if (!clientSearchInput || !clientDatalist) return;
 
- if (dashboardData.length === 0) {
- parentMenu.style.display = 'none';
- return;
- }
- 
- parentMenu.style.display = 'list-item';
- const fragment = document.createDocumentFragment();
+    if (clientList.length > 1) { // Se usa > 1 para no mostrarlo si solo está el Demo
+      clientDatalist.innerHTML = '<option value="Todos los Clientes"></option>';
+      // La ordenación que tenías aquí ya no es necesaria si el backend lo hace.
+      // Pero la dejamos por si acaso.
+      clientList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      clientList.forEach(client => {
+        const option = document.createElement('option');
+        option.value = client.name;
+        clientDatalist.appendChild(option);
+      });
+      clientSearchInput.placeholder = "Todos los Clientes";
+      clientSearchInput.style.display = 'block'; // ¡Importante para que se vea!
+    } else {
+      clientSearchInput.style.display = 'none';
+    }
+  }
 
- dashboardData.forEach(item => {
- const lookerUrl = getCaseInsensitiveProp(item, 'looker') || '';
- const nombre = getCaseInsensitiveProp(item, 'Nombre') || '';
- const numero = getCaseInsensitiveProp(item, 'Numero') || '';
- const descripcion = getCaseInsensitiveProp(item, 'Descripcion') || nombre;
- 
- const li = document.createElement('li');
- li.className = 'submenu-item';
- li.dataset.url = lookerUrl;
- li.title = descripcion;
- li.innerHTML = `<span>${numero} ${nombre}</span>`;
- 
- li.addEventListener('click', function(e) {
- e.stopPropagation();
- setActiveSubmenuItem(this);
- showIframeView(this.dataset.url);
- });
- fragment.appendChild(li);
- });
- submenu.appendChild(fragment);
- } catch (e) {
- onError(new Error("Ocurrió un error al mostrar la lista de tableros."));
- }
- }
+  // =========================================================================
+  // == ESTA ES TU FUNCIÓN ORIGINAL SIN CAMBIOS. ES LA VERSIÓN CORRECTA. =====
+  // =========================================================================
+  function initializeInicioView() {
+    try {
+        const container = document.getElementById('inicio-container');
+        if (!container) return;
 
-function showInicio() {
-  loader.style.display = 'flex'; 
-  google.script.run
-    .withSuccessHandler(function(url) {
-      showIframeView(url, 'menu-inicio');
-    })
-    .withFailureHandler(onError)
-    .obtenerUrlInicio();
-}
+        let mapInitialized = false;
 
-// === NUEVA FUNCIÓN PARA MOSTRAR EL DASHBOARD DE APPS ===
-function showDashboardApps() {
-  loader.style.display = 'flex';
-  google.script.run
-    .withSuccessHandler(function(url) {
-      showIframeView(url, 'menu-dashboard-apps');
-    })
-    .withFailureHandler(onError)
-    .obtenerUrlDashboardAppsnicio()
-}
+        function initialize3DEffect() {
+            const cards = container.querySelectorAll('.feature-card');
+            if (window.innerWidth < 768) return;
+            const maxRotate = 8;
+            cards.forEach(card => {
+                if (card.dataset.eventAttached) return;
+                card.dataset.eventAttached = 'true';
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const { width, height } = rect;
+                    const rotateX = (y / height - 0.5) * -maxRotate;
+                    const rotateY = (x / width - 0.5) * maxRotate;
+                    card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.03)`;
+                    card.style.boxShadow = '0 20px 40px -12px rgba(0,0,0,0.2)';
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'rotateX(0) rotateY(0) scale(1)';
+                    card.style.boxShadow = '0 10px 20px rgba(0,0,0,0.05)';
+                });
+            });
+        }
+        
+        function drawMap() {
+            if (mapInitialized || typeof d3 === 'undefined') return;
+            const svg = d3.select(container.querySelector("#latam-map"));
+            const tooltip = d3.select(container.querySelector("#map-tooltip"));
+            const mapLoading = d3.select(container.querySelector("#map-loading"));
+            const mapContainer = d3.select(container.querySelector(".map-container"));
+            if (svg.empty() || tooltip.empty() || mapLoading.empty() || mapContainer.empty()) {
+                if(!mapLoading.empty()) mapLoading.text("Error: Elementos del mapa no encontrados.");
+                return;
+            }
+            const latamCountryCodes = ["ARG", "BOL", "BRA", "CHL", "COL", "CRI", "CUB", "DOM", "ECU", "SLV", "GTM", "HND", "MEX", "NIC", "PAN", "PRY", "PER", "PRI", "URY", "VEN"];
+            const highlightedCountryCodes = ["COL", "ARG", "ECU", "URY"];
+            const geoJsonUrl = "https://raw.githubusercontent.com/datasets/geo-countries/main/data/countries.geojson";
+            function getCountryCode(feature) { return feature.properties.ISO_A3 || feature.properties["ISO3166-1-Alpha-3"]; }
+            function getCountryName(feature) { return feature.properties.ADMIN || feature.properties.name; }
+            d3.json(geoJsonUrl).then(data => {
+                const latamFeatures = data.features.filter(d => latamCountryCodes.includes(getCountryCode(d)));
+                if (latamFeatures.length === 0) { mapLoading.text("Error: No se encontraron datos para LATAM."); return; }
+                const latamGeoJson = { type: "FeatureCollection", features: latamFeatures };
+                const projection = d3.geoMercator();
+                const path = d3.geoPath().projection(projection);
+                const [width, height] = [mapContainer.node().getBoundingClientRect().width, mapContainer.node().getBoundingClientRect().height];
+                projection.fitSize([width, height], latamGeoJson);
+                svg.selectAll("*").remove(); 
+                svg.selectAll("path.country").data(latamGeoJson.features).enter().append("path").attr("d", path).attr("class", d => `country ${highlightedCountryCodes.includes(getCountryCode(d)) ? 'highlighted' : ''}`).on("mouseover", (event, d) => { tooltip.html(`<strong>${getCountryName(d)}</strong>`).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px").style("opacity", 1); }).on("mouseout", () => tooltip.style("opacity", 0));
+                latamFeatures.forEach(d => {
+                    if (highlightedCountryCodes.includes(getCountryCode(d))) {
+                        const centroid = path.centroid(d);
+                        if (isNaN(centroid[0])) return;
+                        svg.append("circle").attr("class", "country-point").attr("cx", centroid[0]).attr("cy", centroid[1]).attr("r", 4);
+                        let labelX, labelY, lineEndX, lineEndY; let textAnchor = "start";
+                        switch (getCountryCode(d)) {
+                            case "COL": labelX = centroid[0] + 50; labelY = centroid[1] - 20; lineEndX = centroid[0] + 40; lineEndY = centroid[1] - 10; break;
+                            case "ARG": labelX = centroid[0] + 60; labelY = centroid[1] + 10; lineEndX = centroid[0] + 50; lineEndY = centroid[1] + 5; break;
+                            case "ECU": labelX = centroid[0] - 80; labelY = centroid[1] - 30; lineEndX = centroid[0] - 20; lineEndY = centroid[1] - 10; textAnchor = "end"; break;
+                            case "URY": labelX = centroid[0] + 70; labelY = centroid[1] - 5; lineEndX = centroid[0] + 60; lineEndY = centroid[1]; break;
+                            default: labelX = centroid[0] + 20; labelY = centroid[1] - 10; lineEndX = centroid[0] + 10; lineEndY = centroid[1] - 5;
+                        }
+                        svg.append("line").attr("class", "country-line").attr("x1", centroid[0]).attr("y1", centroid[1]).attr("x2", lineEndX).attr("y2", lineEndY);
+                        svg.append("text").attr("class", "country-label").attr("x", labelX).attr("y", labelY).attr("text-anchor", textAnchor).text(getCountryName(d));
+                    }
+                });
+                svg.style("display", "block"); mapLoading.style("display", "none"); mapInitialized = true;
+            }).catch(error => { mapLoading.text(`Error al cargar mapa.`); console.error("Error loading map data:", error); });
+        }
+        
+        const storyDemoSection = container.querySelector('#demo-story-commercial');
+        if (storyDemoSection) {
+            const storySteps = [
+                { step: 1, description: "Todo comienza con el oficial, que utiliza una aplicación móvil para registrar cada actividad de forma digital.", url: "https://www.appsheet.com/start/b122cafd-09e5-4aa2-b541-e41b3dcd707e", isPhone: true },
+                { step: 2, description: "Esa información viaja a un tablero de control, donde se convierte en indicadores y análisis.", url: "https://lookerstudio.google.com/embed/reporting/06ff0b15-b04c-405b-b420-9d25d8525d70/page/p_ymp6zvhsud", isPhone: true },
+                { step: 3, description: "Finalmente, toda la inteligencia operativa llega a usted a través de un portal web unificado y transparente.", url: "https://lookerstudio.google.com/embed/reporting/bd32a86d-b722-430d-b267-a2461005c017/page/PqtSF", isPhone: false }
+            ];
+            const demoFrame = container.querySelector('#demo-frame-commercial');
+            const descriptionEl = container.querySelector('#story-description-commercial');
+            const screenContainer = container.querySelector('#screen-container-commercial');
+            const storyButtons = container.querySelectorAll('.story-btn');
+            function updateStory(stepNumber) {
+                const stepData = storySteps.find(s => s.step == stepNumber);
+                if (!stepData || !demoFrame || !descriptionEl || !screenContainer) return;
+                descriptionEl.style.opacity = 0;
+                setTimeout(() => { descriptionEl.textContent = stepData.description; descriptionEl.style.opacity = 1; }, 300);
+                demoFrame.src = stepData.url;
+                screenContainer.classList.toggle('phone-size', stepData.isPhone);
+                storyButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.step == stepNumber));
+            }
+            storyButtons.forEach(button => {
+                if (!button.dataset.storyEventAttached) { button.addEventListener('click', () => updateStory(button.dataset.step)); button.dataset.storyEventAttached = 'true'; }
+            });
+            if (!storyDemoSection.dataset.initialized) { updateStory(1); storyDemoSection.dataset.initialized = 'true'; }
+        }
 
- function showAplicaciones() {
- setActiveMenuItem('menu-apps');
- 
- contentPanel.innerHTML = `
- <div class="view-header">
- <input type="text" id="app-search-input" placeholder="Buscar aplicaciones...">
- </div>
- <div id="app-card-container"></div>
- `;
+        const hubButtons = container.querySelectorAll('.hub-button');
+        if (hubButtons.length > 0) {
+            const contentPanels = container.querySelectorAll('.content-panel');
+            function switchAppTab(targetId) {
+                container.querySelectorAll('.hub-label').forEach(l => l.classList.remove('active'));
+                hubButtons.forEach(btn => btn.classList.remove('active'));
+                contentPanels.forEach(panel => panel.classList.remove('active'));
+                const targetButton = container.querySelector(`.hub-button[data-hub-target="${targetId}"]`);
+                if (targetButton) {
+                    targetButton.classList.add('active');
+                    if (targetButton.nextElementSibling) targetButton.nextElementSibling.classList.add('active');
+                    const targetPanel = container.querySelector(`#${targetId}`);
+                    if (targetPanel) targetPanel.classList.add('active');
+                }
+            }
+            hubButtons.forEach(button => {
+                if (!button.dataset.hubEventAttached) { button.addEventListener('click', () => switchAppTab(button.dataset.hubTarget)); button.dataset.hubEventAttached = 'true'; }
+            });
+            if (!container.querySelector('.hub-button.active')) { switchAppTab('hub-content-1'); }
+        }
 
- renderAppCards(appData);
+        const navButtons = container.querySelectorAll('.nav-tab');
+        const commercialView = container.querySelector('#commercial-view');
+        const portalView = container.querySelector('#portal-view');
+        
+        function switchView(target) {
+            if (!portalView || !commercialView) return;
+            portalView.classList.toggle('hidden', target !== 'portal');
+            commercialView.classList.toggle('hidden', target === 'portal');
+            navButtons.forEach(btn => btn.classList.toggle('active-tab', btn.dataset.target === target));
+            if (target === 'commercial') {
+                drawMap();
+                setTimeout(() => { commercialView.querySelectorAll('.fade-in').forEach(el => { el.classList.add('is-visible'); }); }, 50);
+            }
+            initialize3DEffect();
+            window.scrollTo(0, 0);
+        }
 
- document.getElementById('app-search-input').addEventListener('input', (e) => {
- const searchTerm = e.target.value.toLowerCase();
- const filteredApps = appData.filter(app => {
- const nombre = (getCaseInsensitiveProp(app, 'Nombre') || '').toLowerCase();
- const descripcion = (getCaseInsensitiveProp(app, 'Descripcion') || '').toLowerCase();
- return nombre.includes(searchTerm) || descripcion.includes(searchTerm);
- });
- renderAppCards(filteredApps);
- });
+        navButtons.forEach(button => {
+            if (!button.dataset.navEventAttached) { button.addEventListener('click', (e) => switchView(e.currentTarget.dataset.target)); button.dataset.navEventAttached = 'true'; }
+        });
 
- loader.style.display = 'none';
- }
+        setTimeout(() => { portalView.querySelectorAll('.fade-in').forEach(el => { el.classList.add('is-visible'); }); }, 50);
+        initialize3DEffect();
 
- function renderAppCards(apps) {
- const container = document.getElementById('app-card-container');
- if (!container) return;
+    } catch (e) { console.error("Error al inicializar la vista de inicio:", e); }
+  }
 
- if (apps.length === 0) {
- container.innerHTML = `<div class="empty-state"><h3>No se encontraron aplicaciones.</h3></div>`;
- return;
- }
+  function populateDashboardSubmenu() {
+    const submenu = document.getElementById('tableros-submenu');
+    const parentMenu = document.getElementById('menu-tableros-parent');
+    submenu.innerHTML = '';
+    if (dashboardData.length === 0) {
+      parentMenu.style.display = 'none';
+      return;
+    }
+    parentMenu.style.display = 'list-item';
+    const fragment = document.createDocumentFragment();
+    dashboardData.forEach(item => {
+      const li = document.createElement('li');
+      li.className = 'submenu-item';
+      li.dataset.url = getCaseInsensitiveProp(item, 'looker') || '';
+      li.title = getCaseInsensitiveProp(item, 'Descripcion') || getCaseInsensitiveProp(item, 'Nombre');
+      li.innerHTML = `<span>${getCaseInsensitiveProp(item, 'Numero') || ''} ${getCaseInsensitiveProp(item, 'Nombre') || ''}</span>`;
+      li.addEventListener('click', function(e) {
+        e.stopPropagation();
+        setActiveSubmenuItem(this);
+        showIframeView(this.dataset.url);
+      });
+      fragment.appendChild(li);
+    });
+    submenu.appendChild(fragment);
+  }
+  
+  // ===============================================
+  // == ESTA ES LA FUNCIÓN CORREGIDA FINAL =========
+  // ===============================================
+  function showInicio() {
+    if (inicioHtmlContent) {
+      setActiveMenuItem('menu-inicio');
+      contentPanel.innerHTML = inicioHtmlContent;
+      
+      // Usamos setTimeout para asegurar que el DOM se actualice antes de inicializar los scripts.
+      setTimeout(() => {
+        initializeInicioView();
+      }, 0);
 
- let cardHtml = '<div class="card-container">';
- cardHtml += apps.map(app => {
- const ICONO_POR_DEFECTO_APP = "https://i.imgur.com/O1hA4Jv.png";
- const appId = getCaseInsensitiveProp(app, 'App') || '';
- const nombre = getCaseInsensitiveProp(app, 'Nombre') || '';
- const numero = getCaseInsensitiveProp(app, 'Numero') || '';
- const descripcion = (getCaseInsensitiveProp(app, 'Descripcion') || 'Sin descripción.').substring(0, 100);
- let imgSrc = getCaseInsensitiveProp(app, 'Imagen');
- if (!imgSrc || String(imgSrc).trim() === '') imgSrc = ICONO_POR_DEFECTO_APP;
- return `<a class="card" href="https://www.appsheet.com/start/${appId}" target="_blank" title="${nombre}">
- <div class="card-icon-wrapper">
- <img src="${imgSrc}" alt="Icono de aplicación" onerror="this.onerror=null; this.src='${ICONO_POR_DEFECTO_APP}';">
- </div>
- <div class="card-content">
- <h3 class="card-title">${numero} ${nombre}</h3>
- <p class="card-description">${descripcion}</p>
- </div>
- </a>`;
- }).join('');
- cardHtml += '</div>';
- 
- container.innerHTML = cardHtml;
- }
+    } else {
+      // Si por alguna razón el contenido no se cargó al inicio, lo pedimos de nuevo.
+      loader.style.display = 'flex';
+      google.script.run
+          .withSuccessHandler(onInicioHtmlSuccess)
+          .withFailureHandler(onError)
+          .getInicioHtml();
+    }
+  }
 
- // **MODIFICADO**: Se ajusta la lógica para manejar tanto tableros como la página de inicio.
+  /*function showDashboardApps() {
+    if (urlDashboardApps1) {
+      showIframeView(urlDashboardApps1, 'menu-dashboard-apps');
+    } else {
+      loader.style.display = 'none';
+      contentPanel.innerHTML = '<p class="error-message">URL del dashboard global no configurada.</p>';
+    }
+  }*/
+
+  function showDashboardApps() {
+    console.log("--- Iniciando showDashboardApps (versión corregida) ---");
+    const clientSearchInput = document.getElementById('client-search');
+    const selectedClientName = clientSearchInput ? clientSearchInput.value.trim() : "";
+    console.log("Cliente seleccionado:", `"${selectedClientName}"`);
+    let finalUrl = '';
+
+    const LOOKER_CONTROL_ID = "df93";
+
+    if (selectedClientName === "@Cliente Demo") {
+        console.log("Caso 1: @Cliente Demo. Usando URL global.");
+        finalUrl = urlDashboardApps;
+    } else {
+        console.log("Caso 2: 'Todos' o cliente específico.");
+        
+        if (selectedClientName === "" || selectedClientName === "Todos los Clientes") {
+            console.log("Subcaso 2.1: 'Todos los Clientes'. Usando URL base sin parámetros.");
+            finalUrl = urlClienteDashboardBase;
+        } else {
+            console.log("Subcaso 2.2: Cliente específico.");
+            const selectedClient = clientList.find(client => client.name === selectedClientName);
+            
+            if (selectedClient) {
+                console.log("Cliente encontrado:", selectedClient);
+                // CORRECCIÓN: Solo codificamos el valor del cliente, no el prefijo.
+                const encodedClientName = encodeURIComponent(selectedClient.name);
+                
+                //const filterValue = `include\u00ee\u0080\u00800\u00ee\u0080\u0080IN\u00ee\u0080\u0080${encodedClientName}`;
+                
+                const paramsObject = {};
+                //paramsObject[LOOKER_CONTROL_ID] = filterValue;
+                
+                const encodedParams =`%7B%22${LOOKER_CONTROL_ID}%22:%22include%25EE%2580%25800%25EE%2580%2580IN%25EE%2580%2580${encodedClientName}%22%7D`; //encodeURIComponent(JSON.stringify(paramsObject));
+
+                finalUrl = `${urlClienteDashboardBase}?params=${encodedParams}`;
+            } else {
+                console.warn("Cliente no encontrado en la lista. Mostrando 'Todos'.");
+                finalUrl = urlClienteDashboardBase;
+            }
+        }
+    }
+    
+    console.log("URL final generada:", finalUrl);
+    
+    if (finalUrl) {
+        showIframeView(finalUrl, 'menu-dashboard-apps');
+    } else {
+        onError(new Error("No se pudo generar una URL final."));
+    }
+  }
+
+  function showAplicaciones() {
+     setActiveMenuItem('menu-apps');
+     loader.style.display = 'flex';
+     contentPanel.innerHTML = `<div class="view-header"><input type="text" id="app-search-input" placeholder="Buscar aplicaciones..."></div><div id="app-card-container"></div>`;
+     renderAppCards(appData);
+     document.getElementById('app-search-input').addEventListener('input', (e) => {
+       const searchTerm = e.target.value.toLowerCase();
+       const filteredApps = appData.filter(app => {
+         const nombre = (getCaseInsensitiveProp(app, 'Nombre') || '').toLowerCase();
+         const descripcion = (getCaseInsensitiveProp(app, 'Descripcion') || '').toLowerCase();
+         return nombre.includes(searchTerm) || descripcion.includes(searchTerm);
+       });
+       renderAppCards(filteredApps);
+     });
+     loader.style.display = 'none';
+  }
+
+  function renderAppCards(apps) {
+    const container = document.getElementById('app-card-container');
+    if (!container) return;
+    if (apps.length === 0) {
+      container.innerHTML = `<div class="empty-state"><h3>No se encontraron aplicaciones.</h3></div>`;
+      return;
+    }
+    let cardHtml = '<div class="card-container">';
+    cardHtml += apps.map(app => {
+      const ICONO_POR_DEFECTO_APP = "https://i.imgur.com/O1hA4Jv.png";
+      const appId = getCaseInsensitiveProp(app, 'App') || '';
+      const nombre = getCaseInsensitiveProp(app, 'Nombre') || '';
+      const numero = getCaseInsensitiveProp(app, 'Numero') || '';
+      const descripcion = (getCaseInsensitiveProp(app, 'Descripcion') || 'Sin descripción.').substring(0, 100);
+      let imgSrc = getCaseInsensitiveProp(app, 'Imagen');
+      if (!imgSrc || String(imgSrc).trim() === '') imgSrc = ICONO_POR_DEFECTO_APP;
+      return `<a class="card" href="https://www.appsheet.com/start/${appId}" target="_blank" title="${nombre}"><div class="card-icon-wrapper"><img src="${imgSrc}" alt="Icono de aplicación" onerror="this.onerror=null; this.src='${ICONO_POR_DEFECTO_APP}';"></div><div class="card-content"><h3 class="card-title">${numero} ${nombre}</h3><p class="card-description">${descripcion}</p></div></a>`;
+    }).join('');
+    cardHtml += '</div>';
+    container.innerHTML = cardHtml;
+  }
+
   function showIframeView(url, menuId) {
     const activeMenuId = menuId || 'menu-tableros-parent';
     setActiveMenuItem(activeMenuId);
-    
     loader.style.display = 'flex';
-    contentPanel.innerHTML = `
-    <div class="iframe-container">
-    <iframe id="content-frame" src="${url}" frameborder="0"></iframe>
-    </div>
-    `;
+    contentPanel.innerHTML = `<div class="iframe-container"><iframe id="content-frame" src="${url}" frameborder="0"></iframe></div>`;
     const iframe = document.getElementById('content-frame');
-
-    const timer = setTimeout(() => {
-      loader.style.display = 'none';
-    }, 5000);
-
-    iframe.onload = () => {
-      clearTimeout(timer); // Cancela el temporizador si el iframe carga correctamente.
-      loader.style.display = 'none';
-    };
-
-    iframe.onerror = () => {
-    clearTimeout(timer);
-    contentPanel.innerHTML = `<p class="error-message">No se pudo cargar el contenido.</p>`;
-    loader.style.display = 'none';
-    };
+    const timer = setTimeout(() => { loader.style.display = 'none'; }, 5000);
+    iframe.onload = () => { clearTimeout(timer); loader.style.display = 'none'; };
+    iframe.onerror = () => { clearTimeout(timer); contentPanel.innerHTML = `<p class="error-message">No se pudo cargar el contenido.</p>`; loader.style.display = 'none'; };
   }
 
   function setActiveMenuItem(menuId) {
     document.querySelectorAll('.main-menu-item').forEach(item => item.classList.remove('active'));
-      if (document.getElementById(menuId)) {
-        document.getElementById(menuId).classList.add('active');
-      }
-      if (menuId !== 'menu-tableros-parent') {
-        document.getElementById('menu-tableros-parent').classList.remove('expanded');
-        document.querySelectorAll('.submenu-item').forEach(item => item.classList.remove('active'));
+    if (document.getElementById(menuId)) { document.getElementById(menuId).classList.add('active'); }
+    if (menuId !== 'menu-tableros-parent') {
+      document.getElementById('menu-tableros-parent').classList.remove('expanded');
+      document.querySelectorAll('.submenu-item').forEach(item => item.classList.remove('active'));
     }
   }
  
@@ -259,8 +509,138 @@ function showDashboardApps() {
     element.classList.add('active');
   }
 
-  function include(filename) {
-    return HtmlService.createHtmlOutputFromFile(filename).getContent();
+    /**
+   * Crea los selectores en la barra superior (se ejecuta una vez)
+   */
+  function createTopSelectors() {
+      const clientFilter = document.getElementById('client-filter');
+      if (!clientFilter) return;
+
+      // Ajustamos el estilo del filtro de cliente para que tenga un ancho fijo
+      const clientSearchInput = document.getElementById('client-search');
+      if(clientSearchInput) clientSearchInput.style.minWidth = '250px';
+
+      const siteFilterHTML = `
+        <div class="multi-select-container" id="top-site-selector-container" style="min-width: 250px;"> <!-- AÑADIR ANCHO FIJO AQUÍ -->
+          <button class="multi-select-button" id="top-site-selector-button">Todos los Sitios</button>
+          <div class="multi-select-dropdown" id="top-site-selector-dropdown"></div>
+        </div>`;
+      clientFilter.insertAdjacentHTML('afterend', siteFilterHTML);
+      topSiteSelectorContainer = document.getElementById('top-site-selector-container');
+      document.getElementById('top-site-selector-button').addEventListener('click', () => {
+        document.getElementById('top-site-selector-dropdown').classList.toggle('active');
+      });
+  }
+  /**
+   * Se ejecuta cuando llegan los sitios del servidor
+   */
+  function onSitesLoaded(sites) {
+      if (sites.error) { return onError(new Error(sites.error)); }
+      siteList = sites;
+      populateSiteFilter();
+      
+      // --- CORRECCIÓN CLAVE: Aplicar la selección de sitios guardada ---
+      const savedSitesRaw = localStorage.getItem('lastSelectedSiteIds');
+      if (savedSitesRaw) {
+          try {
+              const savedSites = JSON.parse(savedSitesRaw);
+              const allCheckboxes = document.querySelectorAll('#top-site-selector-dropdown input');
+              allCheckboxes.forEach(checkbox => {
+                  if (savedSites.includes(checkbox.value)) {
+                      checkbox.checked = true;
+                  }
+              });
+              updateSiteFilterDisplay(); // Actualizar el texto del botón
+          } catch (e) { console.error("Error al parsear sitios guardados:", e); }
+      }
+
+      loader.style.display = 'none';
+  }
+  /**
+   * Llena el selector de sitios con los datos recibidos
+   */
+  function populateSiteFilter() {
+      const dropdown = document.getElementById('top-site-selector-dropdown');
+      if (!dropdown || !topSiteSelectorContainer) return;
+      
+      dropdown.innerHTML = ''; // Limpiar opciones anteriores
+      
+      if (siteList.length > 0) {
+        siteList.forEach(site => {
+          const label = document.createElement('label');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = site.id;
+          
+          // Añadir el listener que actualiza el texto y guarda la selección
+          checkbox.addEventListener('change', () => {
+              updateSiteFilterDisplay();
+              saveSiteSelection();
+          });
+          
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(' ' + site.name));
+          dropdown.appendChild(label);
+        });
+        
+        topSiteSelectorContainer.style.display = 'block'; // Mostrar el filtro de sitios
+        updateSiteFilterDisplay(); // Actualizar el texto del botón por si acaso
+      } else {
+        resetAndHideSiteFilter(); // Ocultar si no hay sitios
+      }
   }
 
- </script>
+  /**
+   * Guarda la selección actual de sitios en el localStorage.
+   */
+  function saveSiteSelection() {
+      const selectedSites = Array.from(document.querySelectorAll('#top-site-selector-dropdown input:checked'))
+                                .map(cb => cb.value);
+      localStorage.setItem('lastSelectedSiteIds', JSON.stringify(selectedSites));
+  }
+
+  /**
+   * Actualiza el texto del botón del filtro de sitios para reflejar la selección.
+   */
+  function updateSiteFilterDisplay() {
+      const button = document.getElementById('top-site-selector-button');
+      if (!button) return;
+      
+      const checkboxes = document.querySelectorAll('#top-site-selector-dropdown input:checked');
+      
+      if (checkboxes.length === 0 || checkboxes.length === siteList.length) {
+        button.textContent = 'Todos los Sitios';
+      } else if (checkboxes.length === 1) {
+        const selectedSiteName = siteList.find(site => site.id === checkboxes[0].value)?.name || '1 sitio seleccionado';
+        // Truncar el nombre si es muy largo para que quepa en el botón
+        button.textContent = selectedSiteName.length > 20 ? selectedSiteName.substring(0, 17) + '...' : selectedSiteName;
+      } else {
+        button.textContent = `${checkboxes.length} sitios seleccionados`;
+      }
+  }
+
+  /**
+   * Oculta y limpia el selector de sitios.
+   */
+  function resetAndHideSiteFilter() {
+      if (!topSiteSelectorContainer) return;
+      siteList = [];
+      topSiteSelectorContainer.style.display = 'none';
+  }
+
+  function handleClientChange(e) {
+      const selectedClientId = e.target.value;
+      
+      // --- CORRECCIÓN CLAVE: Guardar la selección ---
+      localStorage.setItem('lastSelectedClientId', selectedClientId);
+      // Limpiar los sitios guardados, ya que pertenecen al cliente anterior
+      localStorage.removeItem('lastSelectedSiteIds');
+
+      showInicio();
+      loader.style.display = 'flex';
+      
+      // ... el resto de tu función `handleClientChange` (con Promise.all) no cambia ...
+  }
+
+
+</script>
