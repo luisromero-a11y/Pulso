@@ -1,5 +1,5 @@
 // ======================================================
-//        ARCHIVO: Code.gs (CON NOMBRES DE CLIENTE)
+//        ARCHIVO: Code.gs (CON @CLIENTE DEMO POR DEFECTO)
 // ======================================================
 
 // --- IDs de Hojas de cálculo ---
@@ -18,109 +18,106 @@ function doGet() {
     .setFaviconUrl('https://www.appsheet.com/template/gettablefileurl?appName=APPFOTOS-6147552&tableName=FOTO&fileName=FOTO_Images%2Ff0b05aac.FOTOGRAFIA.153703.png');
 }
 
-/**
- * Función para incluir otros archivos HTML en la plantilla principal.
- */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-/**
- * Devuelve el contenido HTML de la página de inicio.
- */
 function getInicioHtml() {
   return HtmlService.createHtmlOutputFromFile('InicioView').getContent();
 }
 
-
-/**
- * Obtiene los datos iniciales. AHORA DEVUELVE OBJETOS DE CLIENTE {id, name}.
- */
 function getInitialData() {
   const userEmail = Session.getEffectiveUser().getEmail();
-  
   try {
+    // --- LECTURA DE HOJAS DE CÁLCULO ---
     const ssPermisos = SpreadsheetApp.openById(SPREADSHEET_ID_PERMISOS);
-    const permisosPerfilData = ssPermisos.getSheetByName('PermisosPerfil').getDataRange().getValues();
-    const permisosClienteData = ssPermisos.getSheetByName('PermisosCliente').getDataRange().getValues();
-    
-    // Leer la hoja CUSTOMERS para obtener los nombres
+    const permisosPerfilSheet = ssPermisos.getSheetByName('PermisosPerfil');
+    if (!permisosPerfilSheet) throw new Error("La pestaña 'PermisosPerfil' no se encontró en la hoja de Permisos.");
+    const permisosClienteSheet = ssPermisos.getSheetByName('PermisosCliente');
+    if (!permisosClienteSheet) throw new Error("La pestaña 'PermisosCliente' no se encontró en la hoja de Permisos.");
     const customersSheet = ssPermisos.getSheetByName('CUSTOMERS');
-    const customersData = customersSheet.getDataRange().getValues();
-
-    // Crear un mapa de búsqueda para eficiencia: { customerId -> customerName }
-    const customerNameMap = new Map();
-    customersData.slice(1).forEach(row => {
-      const customerId = String(row[0]); // Columna A
-      const customerName = row[1];       // Columna B
-      if (customerId && customerName) {
-        customerNameMap.set(customerId, customerName);
-      }
-    });
+    if (!customersSheet) throw new Error("La pestaña 'CUSTOMERS' no se encontró en la hoja de Permisos.");
 
     const ssPrincipal = SpreadsheetApp.openById(SPREADSHEET_ID_PRINCIPAL);
-    const appsData = ssPrincipal.getSheetByName('Apps').getDataRange().getValues();
-    const panelesData = ssPrincipal.getSheetByName('Paneles').getDataRange().getValues();
+    const appsSheet = ssPrincipal.getSheetByName('Apps');
+    if (!appsSheet) throw new Error("La pestaña 'Apps' no se encontró en la hoja Principal.");
+    const panelesSheet = ssPrincipal.getSheetByName('Paneles');
+    if (!panelesSheet) throw new Error("La pestaña 'Paneles' no se encontró en la hoja Principal.");
     
     const ssAppsAsignadas = SpreadsheetApp.openById(SPREADSHEET_ID_APPS_ASIGNADAS);
-    const customerAssignedData = ssAppsAsignadas.getSheetByName('customerAssigned').getDataRange().getValues();
+    const customerAssignedSheet = ssAppsAsignadas.getSheetByName('customerAssigned');
+    if (!customerAssignedSheet) throw new Error("La pestaña 'customerAssigned' no se encontró en la hoja de Apps Asignadas.");
 
-    const perfilRow = permisosPerfilData.find(row => row[3] === userEmail);
+    const permisosPerfilData = permisosPerfilSheet.getDataRange().getValues();
+    const permisosClienteData = permisosClienteSheet.getDataRange().getValues();
+    const customersData = customersSheet.getDataRange().getValues();
+    const appsData = appsSheet.getDataRange().getValues();
+    const panelesData = panelesSheet.getDataRange().getValues();
+    const customerAssignedData = customerAssignedSheet.getDataRange().getValues();
+
+    // --- LÓGICA DE PERMISOS ---
+    const perfilRow = permisosPerfilData.find(row => row && row.length > 3 && row[3] === userEmail);
     if (!perfilRow) {
-      return { error: 'Perfil no encontrado para el usuario: ' + userEmail };
+      // Si el usuario no está registrado, se le da acceso DEMO
+      const clienteDemo = { id: "demo", name: "@Cliente Demo" };
+      return {
+        userEmail: userEmail,
+        apps: [],
+        paneles: [],
+        clientes: [clienteDemo],
+        sites: [], // Devuelve una lista de sitios vacía para el usuario demo/invitado
+        urlDashboardApps: "https://lookerstudio.google.com/embed/reporting/affbb0f2-73e6-4642-aa1c-934ae295454f/page/puJRF",
+        urlClienteDashboardBase: "https://lookerstudio.google.com/embed/reporting/e392f503-7bcd-49b4-b3b4-7633df82e479/page/puJRF"
+      };
     }
+
     const perfil = perfilRow[1];
-
-    // Construir la lista de objetos de cliente {id, name}
-    const clientes = permisosClienteData
-      .slice(1)
-      .filter(row => row[2] === perfil)
-      .map(row => {
-        const customerId = String(row[1]);
-        return {
-          id: customerId,
-          name: customerNameMap.get(customerId) || customerId // Usa el nombre del mapa, o el ID si no se encuentra
-        };
-      });
-
-    if (clientes.length === 0) {
-      return { error: 'No se encontraron clientes asignados para el perfil: ' + perfil };
-    }
-
-    // El Set solo necesita los IDs para filtrar eficientemente
-    const clientesIdSet = new Set(clientes.map(c => c.id));
-    const appsDisponibles = new Set(
-      customerAssignedData.slice(1).filter(row => clientesIdSet.has(String(row[2]))).map(row => String(row[1]))
-    );
-
-    const apps = appsData.slice(1).filter(row => appsDisponibles.has(String(row[1]))).map(row => ({
-        Nombre: row[0], App: row[1], Imagen: row[2], Descripcion: row[3]
-    }));
-
-    const paneles = panelesData.slice(1).filter(row => row[4] !== "" && appsDisponibles.has(String(row[2]))).map(row => ({
-        Nombre: row[0], Looker: row[1], Numero: row[2], Descripcion: row[3]
-    }));
+    const customerNameMap = new Map();
+    customersData.slice(1).forEach(row => { if (row && row[0]) customerNameMap.set(String(row[0]), row[1]); });
     
-    const response = {
+    const clientesConDuplicados = permisosClienteData.slice(1).filter(row => row && row.length > 2 && row[2] === perfil).map(row => {
+      const customerId = String(row[1]);
+      return { id: customerId, name: customerNameMap.get(customerId) || customerId };
+    });
+    const clientesUnicosMap = new Map();
+    clientesConDuplicados.forEach(cliente => clientesUnicosMap.set(cliente.id, cliente));
+    const clientesUsuario = Array.from(clientesUnicosMap.values());
+    const clienteDemo = { id: "demo", name: "@Cliente Demo" };
+    const clientes = [clienteDemo, ...clientesUsuario];
+    const clientesRealesIdSet = new Set(clientesUsuario.map(c => c.id));
+    
+    // =======================================================
+    // INICIO DE LA CORRECCIÓN: Cargar sitios desde el principio
+    // =======================================================
+    // Obtenemos los IDs de todos los clientes reales a los que el usuario tiene acceso
+    const clientIdsForInitialSites = Array.from(clientesRealesIdSet);
+    // Reutilizamos la función que ya creamos para obtener todos los sitios de esos clientes
+    const initialSites = getSitesForClient(clientIdsForInitialSites);
+    // =======================================================
+    // FIN DE LA CORRECCIÓN
+    // =======================================================
+    
+    const appsDisponibles = new Set(customerAssignedData.slice(1).filter(row => row && row.length > 2 && clientesRealesIdSet.has(String(row[2]))).map(row => String(row[1])));
+    const apps = appsData.slice(1).filter(row => row && row.length > 1 && appsDisponibles.has(String(row[1]))).map(row => ({ Nombre: row[0], App: row[1], Imagen: row[2], Descripcion: row[3] }));
+    const paneles = panelesData.slice(1).filter(row => row && row.length > 4 && row[4] !== "" && appsDisponibles.has(String(row[2]))).map(row => ({ Nombre: row[0], Looker: row[1], Numero: row[2], Descripcion: row[3] }));
+    
+    return {
       userEmail: userEmail,
       apps: apps,
       paneles: paneles,
-      clientes: clientes, // Ahora esto es una lista de objetos {id, name}
-      urlDashboardApps: "https://lookerstudio.google.com/embed/reporting/affbb0f2-73e6-4642-aa1c-934ae295454f/page/puJRF"
+      clientes: clientes,
+      sites: initialSites, // <-- ENVIAR LA LISTA INICIAL DE SITIOS AL FRONTEND
+      urlDashboardApps: "https://lookerstudio.google.com/embed/reporting/affbb0f2-73e6-4642-aa1c-934ae295454f/page/puJRF",
+      urlClienteDashboardBase: "https://lookerstudio.google.com/embed/reporting/e392f503-7bcd-49b4-b3b4-7633df82e479/page/puJRF"
     };
 
-    return response;
-
   } catch (e) {
-    Logger.log("Error en getInitialData: " + e.message + " Stack: " + e.stack);
-    return { error: 'Ocurrió un error en el servidor al procesar los datos.' };
+    Logger.log("Error FATAL en getInitialData: " + e.message + " Stack: " + e.stack);
+    return { error: 'Error en el servidor: ' + e.message };
   }
 }
 
-/**
- * Obtiene apps y paneles para un cliente específico (o "Todos").
- * Este código no necesita cambios, ya que funciona con IDs.
- */
+
 function getDataForClient(selectedClient) {
   try {
     const userEmail = Session.getEffectiveUser().getEmail();
@@ -140,7 +137,7 @@ function getDataForClient(selectedClient) {
 
     let clientsToFilter = [];
     if (selectedClient === "Todos") {
-      clientsToFilter = allUserClients;
+      clientsToFilter = [...new Set(allUserClients)];
     } else if (allUserClients.includes(selectedClient)) {
       clientsToFilter = [selectedClient];
     } else {
@@ -177,3 +174,41 @@ function getDataForClient(selectedClient) {
     return { error: e.message };
   }
 }
+  /**
+ * Obtiene la lista de sitios para un cliente o un grupo de clientes.
+ * @param {string[]} clientIds - Un array con los IDs de los clientes a buscar.
+ * @returns {object[]} Un array de objetos, cada uno con { id, name }.
+ */
+  function getSitesForClient(clientIds) {
+    try {
+      if (!clientIds || clientIds.length === 0) {
+        return []; // No hay clientes, no hay sitios.
+      }
+      
+      const ssPermisos = SpreadsheetApp.openById(SPREADSHEET_ID_PERMISOS);
+      const sitesSheet = ssPermisos.getSheetByName('SITES'); // Asegúrate que el nombre de la pestaña es SITES
+      if (!sitesSheet) {
+        throw new Error("La pestaña 'SITES' no se encontró en la hoja de Permisos.");
+      }
+      const sitesData = sitesSheet.getDataRange().getValues();
+      
+      const clientIdsSet = new Set(clientIds); // Para búsquedas rápidas
+
+      const sites = sitesData
+        .slice(1) // Omitir encabezado
+        .filter(row => row && row.length > 5 && clientIdsSet.has(String(row[5]))) // Columna F (customerId)
+        .map(row => ({
+          id: String(row[0]),   // Columna A (siteId)
+          name: String(row[1])  // Columna B (siteName)
+        }));
+
+      // Opcional: Ordenar alfabéticamente
+      sites.sort((a, b) => a.name.localeCompare(b.name));
+      
+      return sites;
+
+    } catch(e) {
+      Logger.log("Error en getSitesForClient: " + e.message);
+      return { error: e.message };
+    }
+  }
