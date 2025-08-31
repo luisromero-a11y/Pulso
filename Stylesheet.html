@@ -322,6 +322,94 @@ body:not(.sidebar-expanded) .user-profile {
  color: var(--slate-500);
  transition: background-color 0.2s, color 0.2s;
  }
+
+
+
+
+
+
+
+
+
+/* 1. Estilos para los grupos expandibles */
+.submenu-group {
+  margin-bottom: 8px;
+}
+
+.submenu-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--slate-800);
+  transition: background-color 0.2s;
+}
+
+.submenu-group-header:hover {
+  background-color: var(--slate-100);
+}
+
+.submenu-group-header .arrow {
+  transition: transform 0.3s ease;
+  opacity: 1; /* Asegurarse de que la flecha sea visible */
+}
+
+.submenu-group.expanded > .submenu-group-header .arrow {
+  transform: rotate(90deg);
+}
+
+.submenu-group-content {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  max-height: 0; /* Oculto por defecto */
+  overflow: hidden;
+  transition: max-height 0.4s ease-out;
+}
+
+.submenu-group.expanded > .submenu-group-content {
+  max-height: 1000px; /* Un valor alto para permitir que se expanda */
+}
+
+/* 2. Estilos para los items dentro de los grupos */
+.submenu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px 10px 48px; /* Padding original */
+}
+
+.submenu-group-content .submenu-item {
+  padding-left: 24px; /* Añadir sangría extra para que se vean anidados */
+}
+
+/* 3. Estilos para las etiquetas de tipo de tablero */
+.dashboard-type {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 10px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.dashboard-type.general {
+  background-color: var(--blue-600);
+  color: var(--white);
+  border: 1px solid var(--blue-600);
+}
+
+.dashboard-type.asignado {
+  background-color: transparent;
+  color: var(--slate-500);
+  border: 1px solid var(--slate-300);
+}
+
+
  .submenu-item:hover {
  color: var(--slate-900);
  background-color: var(--slate-100);
@@ -517,6 +605,9 @@ body.sidebar-expanded .main-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+
+  color: var(--slate-800); /* Mismo color que el texto principal */
+  font-weight: 400;       /* Peso de fuente normal, no de botón */  
 }
 .multi-select-button::after {
   content: '▼';
@@ -550,6 +641,28 @@ body.sidebar-expanded .main-content {
 }
 .multi-select-dropdown input {
   margin-right: 8px;
+}
+
+#reset-filters-button {
+  background-color: transparent;
+  border: none;
+  color: var(--slate-400); /* Un color gris sutil */
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+#reset-filters-button:hover {
+  color: var(--slate-600); /* Se oscurece al pasar el mouse */
+  background-color: var(--slate-100); /* Un fondo ligero */
+}
+
+#reset-filters-button i {
+  font-size: 16px;
 }
 
 </style>
