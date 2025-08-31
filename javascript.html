@@ -14,7 +14,9 @@
 
   let siteList = []; // Para guardar la lista de sitios actual
   let topSiteSelectorContainer; // Para el nuevo contenedor del filtro de sitios
-  
+  // --- CONSTANTES DE LOCAL STORAGE ---
+  const LS_CLIENT_KEY = 'selectedClientName';
+  const LS_SITES_KEY = 'selectedSiteIds';
 
   /**
   * Obtiene una propiedad de un objeto sin distinguir mayúsculas y minúsculas.
@@ -33,11 +35,19 @@
   // --- INICIALIZACIÓN ---
   document.addEventListener("DOMContentLoaded", function() {
     try {
-      createTopSelectors(); 
+      createTopSelectors();
       setupMenuListeners();
       loader.innerHTML = '<i class="fa-solid fa-spinner fa-spin fa-2x"></i>';
+
+      // Cargar el contenido HTML de inicio primero
       google.script.run.withSuccessHandler(onInicioHtmlSuccess).withFailureHandler(onError).getInicioHtml();
+
+      // Luego, obtener los datos iniciales (clientes, apps, paneles, y la lista completa de sitios para los clientes del usuario)
       google.script.run.withSuccessHandler(onInitialDataSuccess).withFailureHandler(onDataError).getInitialData();
+
+      // Recuperar selecciones de localStorage al cargar
+      //loadSavedFilterSelections();
+
     } catch (e) {
       onError(e);
     }
@@ -53,28 +63,46 @@
     initializeInicioView();
   }
 
-  function onInitialDataSuccess(response) {
+   function onInitialDataSuccess(response) {
       if (response.error) {
         return onDataError(new Error(response.error));
       }
-      
-      // Guardar todos los datos recibidos en las variables globales
+
       dashboardData = response.paneles || [];
       appData = response.apps || [];
       currentUserEmail = response.userEmail || "";
       urlDashboardApps = response.urlDashboardApps || "";
       urlClienteDashboardBase = response.urlClienteDashboardBase || "";
       clientList = response.clientes || [];
-      siteList = response.sites || []; // <-- CORRECCIÓN: Guardar la lista inicial de sitios
+      siteList = response.sites || []; // La lista inicial de sitios
 
-      // Actualizar la información del perfil de usuario
       document.getElementById('user-info').textContent = currentUserEmail;
       document.getElementById('user-name-display').textContent = currentUserEmail.split('@')[0];
-      
-      // Poblar los elementos de la UI con los datos recibidos
+
       populateDashboardSubmenu();
       populateClientFilter();
-      populateSiteFilter(); // <-- CORRECCIÓN: Llamar para poblar los sitios desde el principio
+
+      loadSavedFilterSelections(); 
+
+      // Si hay un cliente guardado, loadSavedFilterSelections ya lo habrá puesto en el input
+      // Si no, establecemos el valor por defecto si el input ya existe
+      const clientSearchInput = document.getElementById('client-search');
+      if (clientSearchInput && !localStorage.getItem(LS_CLIENT_KEY)) {
+          clientSearchInput.value = "Todos los Clientes";
+      }
+
+      // NO llamar populateSiteFilter aquí. Se llamará desde handleClientChange
+      // o desde loadSavedFilterSelections después de que se cargue el cliente.
+      // Si no hay cliente guardado, getInitialData ya trajo los sitios iniciales (de todos los clientes reales)
+      // y estos se poblarán cuando se llame populateSiteFilter desde handleClientChange (simulada)
+      // o directamente si no hay selección de cliente guardada.
+      // Si no hay selección de cliente guardada, es importante que populateSiteFilter se llame
+      // para mostrar los sitios iniciales (todos los del usuario).
+      if (!localStorage.getItem(LS_CLIENT_KEY)) {
+          populateSiteFilter();
+          // Si no hay selección de sitio guardada, el texto del botón debe ser "Todos los Sitios"
+          document.getElementById('top-site-selector-button').textContent = 'Todos los Sitios';
+      }
 
   }
   
@@ -86,7 +114,7 @@
       if (document.getElementById('app-card-container')) {
         renderAppCards(appData);
       }
-      // Ya no oculta el loader aquí
+      loader.style.display = 'none'; // Ahora se oculta aquí, después de que los datos filtrados (apps y paneles) estén listos
   }
 
   function onDataError(error) {
@@ -115,10 +143,14 @@
         tablerosParent.classList.toggle('expanded');
       }
     });
-    const clientSearchInput = document.getElementById('client-search');
+        const clientSearchInput = document.getElementById('client-search');
     if (clientSearchInput) {
-        clientSearchInput.addEventListener('change', handleClientChange);
+        clientSearchInput.addEventListener('change', (e) => {
+            handleClientChange(e);
+            saveClientSelection(e.target.value.trim()); // Guardar selección del cliente
+        });
     }
+    document.getElementById('reset-filters-button').addEventListener('click', resetAllFilters);
   }
   
   // =======================================================
@@ -126,25 +158,55 @@
   // =======================================================
   function handleClientChange(e) {
       const selectedName = e.target.value.trim();
-      showInicio();
-      loader.style.display = 'flex';
+      showInicio(); // <-- Mover esto al principio para que siempre se vea el inicio
+      loader.style.display = 'flex'; // Mostrar loader
       
       let clientIdForFilter = 'Todos';
       let clientIdsForSites = [];
 
-      if (selectedName !== "" && selectedName !== "Todos los Clientes" && selectedName !== "@Cliente Demo") {
+      if (selectedName === "@Cliente Demo") {
+          // Si es el cliente demo, no hay sitios reales asociados.
+          clientIdForFilter = 'demo'; // O el ID real de tu cliente demo si lo tienes
+          clientIdsForSites = [];
+          // Asegurarse de que el filtro de sitios esté oculto y limpio.
+          resetAndHideSiteFilter();
+          loader.style.display = 'none'; // Ocultar loader ya que no hay llamadas al servidor de sitios
+      } else if (selectedName === "" || selectedName === "Todos los Clientes") {
+          clientIdForFilter = 'Todos';
+          clientIdsForSites = clientList.filter(c => c.id !== 'demo').map(c => c.id);
+          // Borrar la selección de sitios guardada si el usuario vuelve a "Todos"
+          localStorage.removeItem(LS_SITES_KEY);
+          window._savedSiteIdsToApply = []; // Limpiar temporalmente también
+      } else {
           const selectedClient = clientList.find(client => client.name === selectedName);
           if (selectedClient) {
               clientIdForFilter = selectedClient.id;
               clientIdsForSites = [selectedClient.id];
+          } else {
+              // Si el cliente no se encuentra (posiblemente borrado o error),
+              // revertir a "Todos" para evitar errores.
+              console.warn("Cliente seleccionado no encontrado. Volviendo a 'Todos los Clientes'.");
+              e.target.value = "Todos los Clientes"; // Actualiza visualmente
+              clientIdForFilter = 'Todos';
+              clientIdsForSites = clientList.filter(c => c.id !== 'demo').map(c => c.id);
+              localStorage.removeItem(LS_CLIENT_KEY); // Limpiar cliente guardado
+              localStorage.removeItem(LS_SITES_KEY); // Limpiar sitios guardados
+              window._savedSiteIdsToApply = [];
           }
-      } else {
-          clientIdsForSites = clientList.filter(c => c.id !== 'demo').map(c => c.id);
       }
       
-      // SIMPLIFICADO: Llamamos a ambas funciones una tras otra
+      // Llamamos a ambas funciones una tras otra
       google.script.run.withSuccessHandler(onFilteredDataSuccess).getDataForClient(clientIdForFilter);
-      google.script.run.withSuccessHandler(onSitesLoaded).getSitesForClient(clientIdsForSites);
+      
+      // Solo llamar a getSitesForClient si hay IDs de clientes reales
+      if (clientIdsForSites.length > 0) {
+        google.script.run.withSuccessHandler(onSitesLoaded).getSitesForClient(clientIdsForSites);
+      } else {
+        // Si no hay clientes reales (e.g., @Cliente Demo), asegura que el loader se oculte
+        // y que el filtro de sitios se oculte/limpie
+        loader.style.display = 'none';
+        resetAndHideSiteFilter();
+      }
   }
 
   function populateClientFilter() {
@@ -332,17 +394,34 @@
       return;
     }
     parentMenu.style.display = 'list-item';
+    
     const fragment = document.createDocumentFragment();
     dashboardData.forEach(item => {
       const li = document.createElement('li');
       li.className = 'submenu-item';
-      li.dataset.url = getCaseInsensitiveProp(item, 'looker') || '';
+      li.dataset.baseUrl = getCaseInsensitiveProp(item, 'looker') || ''; 
       li.title = getCaseInsensitiveProp(item, 'Descripcion') || getCaseInsensitiveProp(item, 'Nombre');
       li.innerHTML = `<span>${getCaseInsensitiveProp(item, 'Numero') || ''} ${getCaseInsensitiveProp(item, 'Nombre') || ''}</span>`;
+      
       li.addEventListener('click', function(e) {
         e.stopPropagation();
         setActiveSubmenuItem(this);
-        showIframeView(this.dataset.url);
+        
+        const baseUrl = this.dataset.baseUrl;
+        const siteNames = getSelectedSiteNames(); // Obtiene el array de nombres
+
+        // Reemplaza con el ID de control de sitios de TUS tableros
+        const LOOKER_SITE_CONTROL_ID = "011f6f19"; 
+        
+        const filters = {};
+        if (siteNames.length > 0) {
+          filters[LOOKER_SITE_CONTROL_ID] = siteNames; // Pasa el array de nombres
+        }
+
+        const finalUrl = buildLookerUrlWithFilters(baseUrl, filters);
+        
+        console.log("URL de tablero generada:", finalUrl);
+        showIframeView(finalUrl);
       });
       fragment.appendChild(li);
     });
@@ -381,7 +460,7 @@
     }
   }*/
 
-  function showDashboardApps() {
+  /*function showDashboardApps() {
     console.log("--- Iniciando showDashboardApps (versión corregida) ---");
     const clientSearchInput = document.getElementById('client-search');
     const selectedClientName = clientSearchInput ? clientSearchInput.value.trim() : "";
@@ -430,6 +509,39 @@
     } else {
         onError(new Error("No se pudo generar una URL final."));
     }
+  }*/
+
+  function showDashboardApps() {
+      const clientSearchInput = document.getElementById('client-search');
+      const selectedClientName = clientSearchInput ? clientSearchInput.value.trim() : "";
+      
+      let baseUrl = urlClienteDashboardBase;
+      const filters = {};
+
+      const LOOKER_CLIENT_CONTROL_ID = "df93";
+      // Reemplaza con el ID de control de sitios de ESTE tablero
+      const LOOKER_SITE_CONTROL_ID = "df94"; 
+
+      if (selectedClientName === "@Cliente Demo") {
+          baseUrl = urlDashboardApps; 
+      } else if (selectedClientName && selectedClientName !== "Todos los Clientes") {
+          filters[LOOKER_CLIENT_CONTROL_ID] = [selectedClientName]; // Pasa el cliente como un array
+      }
+
+      const siteNames = getSelectedSiteNames(); // Obtiene el array de nombres
+      if (siteNames.length > 0) {
+          filters[LOOKER_SITE_CONTROL_ID] = siteNames; // Pasa el array de nombres
+      }
+
+      const finalUrl = buildLookerUrlWithFilters(baseUrl, filters);
+
+      console.log("URL de Pulse Global generada:", finalUrl);
+
+      if (finalUrl) {
+          showIframeView(finalUrl, 'menu-dashboard-apps');
+      } else {
+          onError(new Error("No se pudo generar una URL final."));
+      }
   }
 
   function showAplicaciones() {
@@ -522,10 +634,27 @@
    * Se ejecuta cuando llegan los sitios del servidor
    */
   function onSitesLoaded(sites) {
-      if (sites.error) { return onError(new Error(sites.error)); }
+      if (sites.error) {
+          onError(new Error(sites.error));
+          loader.style.display = 'none'; // Ocultar loader incluso en error
+          return;
+      }
       siteList = sites;
       populateSiteFilter();
-      loader.style.display = 'none'; // El spinner se oculta aquí
+
+      // Aplicar las selecciones de sitio guardadas si existen
+      if (window._savedSiteIdsToApply && window._savedSiteIdsToApply.length > 0) {
+          const dropdown = document.getElementById('top-site-selector-dropdown');
+          if (dropdown) {
+              dropdown.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                  checkbox.checked = window._savedSiteIdsToApply.includes(checkbox.value);
+              });
+              updateSiteFilterDisplay(); // Actualizar el texto del botón
+          }
+          window._savedSiteIdsToApply = []; // Limpiar después de aplicar
+      }
+      
+      loader.style.display = 'none'; // Ocultar el loader aquí, después de que los sitios estén listos
   }
 
   /**
@@ -536,18 +665,61 @@
       if (!dropdown || !topSiteSelectorContainer) return;
       dropdown.innerHTML = '';
       if (siteList.length > 0) {
+        // Añadir una opción para seleccionar/deseleccionar todos
+        const selectAllLabel = document.createElement('label');
+        const selectAllCheckbox = document.createElement('input');
+        selectAllCheckbox.type = 'checkbox';
+        selectAllCheckbox.id = 'select-all-sites';
+        selectAllCheckbox.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            dropdown.querySelectorAll('input[type="checkbox"]:not(#select-all-sites)').forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateSiteFilterDisplay();
+            // Guardar la selección
+            const selectedSiteIds = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked:not(#select-all-sites)'))
+                                        .map(cb => cb.value);
+            saveSiteSelection(selectedSiteIds);
+        });
+        selectAllLabel.appendChild(selectAllCheckbox);
+        selectAllLabel.appendChild(document.createTextNode(' Seleccionar Todos'));
+        dropdown.appendChild(selectAllLabel);
+
         siteList.forEach(site => {
           const label = document.createElement('label');
           const checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
           checkbox.value = site.id;
-          checkbox.addEventListener('change', updateSiteFilterDisplay);
+          checkbox.addEventListener('change', () => {
+              updateSiteFilterDisplay();
+              // Desmarcar "Seleccionar Todos" si algún sitio individual se desmarca
+              if (!checkbox.checked) {
+                  document.getElementById('select-all-sites').checked = false;
+              } else {
+                  // Marcar "Seleccionar Todos" si todos los sitios individuales están marcados
+                  const allIndividualChecked = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:not(#select-all-sites)'))
+                                                  .every(cb => cb.checked);
+                  document.getElementById('select-all-sites').checked = allIndividualChecked;
+              }
+              // Guardar la selección
+              const selectedSiteIds = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked:not(#select-all-sites)'))
+                                          .map(cb => cb.value);
+              saveSiteSelection(selectedSiteIds);
+          });
           label.appendChild(checkbox);
           label.appendChild(document.createTextNode(' ' + site.name));
           dropdown.appendChild(label);
         });
         topSiteSelectorContainer.style.display = 'block';
         updateSiteFilterDisplay();
+
+        // Si se cargaron sitios y hay una selección guardada para aplicar,
+        // esto ya debería haber sido manejado en onSitesLoaded.
+        // Asegurarse de que el "Seleccionar Todos" esté correcto.
+        const allIndividualChecked = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:not(#select-all-sites)'))
+                                    .every(cb => cb.checked);
+        document.getElementById('select-all-sites').checked = (siteList.length > 0 && allIndividualChecked);
+
       } else {
         resetAndHideSiteFilter();
       }
@@ -558,11 +730,12 @@
    */
   function updateSiteFilterDisplay() {
       const button = document.getElementById('top-site-selector-button');
-      const checkboxes = document.querySelectorAll('#top-site-selector-dropdown input:checked');
-      if (checkboxes.length === 0 || checkboxes.length === siteList.length) {
+      // Excluir la casilla de "Seleccionar Todos" del conteo
+      const checkboxes = document.querySelectorAll('#top-site-selector-dropdown input:checked:not(#select-all-sites)');
+      if (checkboxes.length === 0) {
         button.textContent = 'Todos los Sitios';
       } else if (checkboxes.length === 1) {
-        button.textContent = '1 sitio seleccionado';
+        button.textContent = siteList.find(s => s.id === checkboxes[0].value)?.name || '1 sitio seleccionado';
       } else {
         button.textContent = `${checkboxes.length} sitios seleccionados`;
       }
@@ -574,8 +747,117 @@
   function resetAndHideSiteFilter() {
       if (!topSiteSelectorContainer) return;
       siteList = [];
+      const dropdown = document.getElementById('top-site-selector-dropdown');
+      if (dropdown) dropdown.innerHTML = ''; // Limpiar el contenido del dropdown
+      document.getElementById('top-site-selector-button').textContent = 'Todos los Sitios';
       topSiteSelectorContainer.style.display = 'none';
+      localStorage.removeItem(LS_SITES_KEY); // Limpiar también del localStorage
   }
 
+  function loadSavedFilterSelections() {
+      const savedClientName = localStorage.getItem(LS_CLIENT_KEY);
+      const savedSiteIds = JSON.parse(localStorage.getItem(LS_SITES_KEY) || '[]');
+
+      const clientSearchInput = document.getElementById('client-search');
+
+      if (clientSearchInput && savedClientName) {
+        // Establecer el valor y simular un cambio para que se actualicen los datos
+        clientSearchInput.value = savedClientName;
+        // Disparar un evento 'change' para que se actualicen los datos y sitios
+        const event = new Event('change');
+        clientSearchInput.dispatchEvent(event);
+      } else {
+        // Si no hay cliente guardado, asegúrate de que el filtro esté en "Todos los Clientes"
+        if (clientSearchInput) {
+          clientSearchInput.value = "Todos los Clientes";
+        }
+        // Y obtener los sitios iniciales para "Todos los Clientes"
+        google.script.run.withSuccessHandler(onSitesLoaded).getSitesForClient(clientList.filter(c => c.id !== 'demo').map(c => c.id));
+      }
+
+      // Guardar los IDs de sitio en una variable temporal para aplicarlos después de que se populen los sitios
+      window._savedSiteIdsToApply = savedSiteIds;
+    }
+
+    /**
+     * Guarda la selección actual del filtro de cliente en localStorage.
+     */
+    function saveClientSelection(clientName) {
+      localStorage.setItem(LS_CLIENT_KEY, clientName);
+    }
+
+    /**
+     * Guarda la selección actual del filtro de sitios en localStorage.
+     */
+    function saveSiteSelection(siteIds) {
+      localStorage.setItem(LS_SITES_KEY, JSON.stringify(siteIds));
+    }
+  function resetAllFilters() {
+    console.log('Reseteando filtros...');
+    
+    // Limpiar almacenamiento local
+    localStorage.removeItem(LS_CLIENT_KEY);
+    localStorage.removeItem(LS_SITES_KEY);
+    
+    // Resetear el valor del input de cliente
+    const clientSearchInput = document.getElementById('client-search');
+    if (clientSearchInput) {
+      clientSearchInput.value = "Todos los Clientes";
+      
+      // Disparar el evento 'change' para que se ejecute toda la lógica de recarga
+      // Esto reutiliza tu función handleClientChange() de forma eficiente
+      const event = new Event('change');
+      clientSearchInput.dispatchEvent(event);
+    }
+  }
+
+  function getSelectedSiteNames() {
+    const checkboxes = document.querySelectorAll('#top-site-selector-dropdown input:checked:not(#select-all-sites)');
+    
+    if (checkboxes.length === 0 || checkboxes.length === siteList.length) {
+      return []; // Devuelve un array vacío si no hay filtro que aplicar
+    }
+
+    const siteNames = Array.from(checkboxes).map(checkbox => {
+      const site = siteList.find(s => s.id === checkbox.value);
+      return site ? site.name : null;
+    }).filter(name => name !== null); // Filtra cualquier sitio que no se haya encontrado
+
+    return siteNames;
+  }
+
+  function buildLookerUrlWithFilters(baseUrl, filters) {
+    const filterParts = [];
+    // Este es el delimitador que Looker espera DENTRO del valor del parámetro, ya codificado para URL.
+    const LOOKER_DELIMITER = "%25EE%2580%2580";
+
+    for (const controlId in filters) {
+      const values = filters[controlId]; // `values` debe ser un array de strings
+
+      if (values && values.length > 0) {
+        // 1. Codificamos cada valor individualmente para manejar espacios y caracteres especiales.
+        //    Ej: "SODIMAC MOSQUERA" se convierte en "SODIMAC%20MOSQUERA"
+        const encodedValues = values.map(v => encodeURIComponent(v));
+
+        // 2. Unimos los valores ya codificados con el delimitador especial de Looker.
+        const joinedValues = encodedValues.join(LOOKER_DELIMITER);
+
+        // 3. Construimos la parte del JSON para este control.
+        //    Ej: "df93":"include...IN...SODIMAC%20MOSQUERA"
+        const part = `%22${controlId}%22:%22include${LOOKER_DELIMITER}0${LOOKER_DELIMITER}IN${LOOKER_DELIMITER}${joinedValues}%22`;
+        filterParts.push(part);
+      }
+    }
+
+    // Si no se generó ninguna parte de filtro, devolvemos la URL base.
+    if (filterParts.length === 0) {
+      return baseUrl;
+    }
+
+    // 4. Unimos todas las partes de los filtros con una coma y las envolvemos en llaves codificadas (`%7B` y `%7D`).
+    const finalParams = `%7B${filterParts.join(',')}%7D`;
+
+    return `${baseUrl}?params=${finalParams}`;
+  }
 
 </script>
